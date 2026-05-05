@@ -7,4 +7,4 @@ library;
 /// Assets are downloaded from [downloadUri].
 ///
 /// After changing [assetHashes] must be updated by running `dart tool/generate_asset_hashes.dart`.
-const version = 'pixer-assets-v0.0.2';
+const version = 'pixer-assets-v0.0.5';
