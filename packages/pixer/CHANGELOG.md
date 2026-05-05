@@ -1,3 +1,8 @@
+## 0.0.4
+
+- Added JPEG quality support to `Pixer.encode()` via `quality`.
+- Improved binding generation to resolve the active macOS SDK with `xcrun`.
+
 ## 0.0.3
 
 - Fixed build hook for web platform.
