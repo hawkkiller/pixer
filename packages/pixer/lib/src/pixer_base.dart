@@ -8,15 +8,15 @@ import 'pixer_exception.dart';
 import 'image_metadata.dart';
 
 /// A fast image processing library
-/// 
+///
 /// This class provides methods for loading, saving, and manipulating images.
 /// Images are backed by native Rust code for high performance.
-/// 
+///
 /// **Important:** Always call [dispose] when done with an image to free native
 /// memory. While a finalizer provides a safety net, it is not guaranteed to run
 /// (especially in isolates). For reliable memory management, always dispose
 /// explicitly.
-/// 
+///
 /// Example:
 /// ```dart
 /// final image = Pixer.fromFile('input.jpg');
@@ -30,8 +30,9 @@ final class Pixer {
     _finalizer.attach(this, _handle, detach: this);
   }
 
-  static final Finalizer<ffi.Pointer<ImageHandle>> _finalizer =
-      Finalizer((handle) => pixer_free(handle));
+  static final Finalizer<ffi.Pointer<ImageHandle>> _finalizer = Finalizer(
+    (handle) => pixer_free(handle),
+  );
 
   final ffi.Pointer<ImageHandle> _handle;
   bool _isDisposed = false;
@@ -77,7 +78,11 @@ final class Pixer {
     final errorPtr = malloc.allocate<ffi.Uint32>(ffi.sizeOf<ffi.Uint32>());
     try {
       dataPtr.asTypedList(data.length).setAll(0, data);
-      final handle = pixer_load_from_memory_with_error(dataPtr, data.length, errorPtr);
+      final handle = pixer_load_from_memory_with_error(
+        dataPtr,
+        data.length,
+        errorPtr,
+      );
       if (handle == ffi.nullptr) {
         final errorCode = ImageErrorCode.fromValue(errorPtr.value);
         throw PixerException.fromCode(errorCode, context: 'input: memory');
@@ -109,7 +114,10 @@ final class Pixer {
       );
       if (handle == ffi.nullptr) {
         final errorCode = ImageErrorCode.fromValue(errorPtr.value);
-        throw PixerException.fromCode(errorCode, context: 'input: memory, format: ${format.name}');
+        throw PixerException.fromCode(
+          errorCode,
+          context: 'input: memory, format: ${format.name}',
+        );
       }
       return Pixer._(handle);
     } finally {
@@ -127,7 +135,9 @@ final class Pixer {
 
   void _validateDimensions(int width, int height, {String? context}) {
     if (width <= 0 || height <= 0) {
-      throw InvalidDimensionsException(context ?? 'width and height must be > 0');
+      throw InvalidDimensionsException(
+        context ?? 'width and height must be > 0',
+      );
     }
   }
 
@@ -135,7 +145,11 @@ final class Pixer {
     if (x < 0 || y < 0) {
       throw InvalidDimensionsException('x and y must be >= 0');
     }
-    _validateDimensions(width, height, context: 'crop width and height must be > 0');
+    _validateDimensions(
+      width,
+      height,
+      context: 'crop width and height must be > 0',
+    );
 
     // Bounds validation
     final meta = getMetadata();
@@ -174,7 +188,9 @@ final class Pixer {
     _checkDisposed();
     if (_cachedMetadata != null) return _cachedMetadata!;
 
-    final metadataPtr = malloc.allocate<ImageMetadata>(ffi.sizeOf<ImageMetadata>());
+    final metadataPtr = malloc.allocate<ImageMetadata>(
+      ffi.sizeOf<ImageMetadata>(),
+    );
     try {
       final errorCode = pixer_get_metadata(_handle, metadataPtr);
       final error = _errorFromValue(errorCode);
@@ -198,7 +214,7 @@ final class Pixer {
   ColorType get colorType => getMetadata().colorType;
 
   /// Saves the image to a file
-  /// 
+  ///
   /// The format is determined by the file extension.
   /// Throws [InvalidPathException] if the path is empty.
   void saveToFile(String path) {
@@ -218,17 +234,46 @@ final class Pixer {
     }
   }
 
-  /// Encodes the image to a byte buffer in the specified format
-  Uint8List encode(ImageFormatEnum format) {
+  /// Encodes the image to a byte buffer in the specified format.
+  ///
+  /// [quality] is supported for JPEG encoding only and must be between 1 and 100.
+  Uint8List encode(ImageFormatEnum format, {int? quality}) {
     _checkDisposed();
-    final outDataPtr = malloc.allocate<ffi.Pointer<ffi.Uint8>>(ffi.sizeOf<ffi.Pointer<ffi.Uint8>>());
+    if (quality != null) {
+      if (format != ImageFormatEnum.Jpeg) {
+        throw ArgumentError.value(
+          quality,
+          'quality',
+          'is only supported when encoding JPEG images',
+        );
+      }
+      if (quality < 1 || quality > 100) {
+        throw RangeError.range(quality, 1, 100, 'quality');
+      }
+    }
+
+    final outDataPtr = malloc.allocate<ffi.Pointer<ffi.Uint8>>(
+      ffi.sizeOf<ffi.Pointer<ffi.Uint8>>(),
+    );
     final outLenPtr = malloc.allocate<ffi.UintPtr>(ffi.sizeOf<ffi.UintPtr>());
-    
+
     try {
-      final errorCode = pixer_write_to(_handle, format.value, outDataPtr, outLenPtr);
+      final errorCode = quality == null
+          ? pixer_write_to(_handle, format.value, outDataPtr, outLenPtr)
+          : pixer_write_to_with_quality(
+              _handle,
+              format.value,
+              quality,
+              outDataPtr,
+              outLenPtr,
+            );
       final error = _errorFromValue(errorCode);
       if (error != ImageErrorCode.Success) {
-        throw PixerException.fromCode(error, context: 'format: ${format.name}');
+        final qualityContext = quality == null ? '' : ', quality: $quality';
+        throw PixerException.fromCode(
+          error,
+          context: 'format: ${format.name}$qualityContext',
+        );
       }
 
       final dataPtr = outDataPtr.value;
@@ -238,10 +283,10 @@ final class Pixer {
       }
 
       final result = Uint8List.fromList(dataPtr.asTypedList(len));
-      
+
       // Free the buffer allocated by Rust
       pixer_free_buffer(dataPtr, len);
-      
+
       return result;
     } finally {
       malloc.free(outDataPtr);
@@ -250,9 +295,13 @@ final class Pixer {
   }
 
   /// Resizes the image to the specified dimensions, maintaining aspect ratio
-  /// 
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer resize(int width, int height, {FilterTypeEnum filter = FilterTypeEnum.Lanczos3}) {
+  Pixer resize(
+    int width,
+    int height, {
+    FilterTypeEnum filter = FilterTypeEnum.Lanczos3,
+  }) {
     _checkDisposed();
     _validateDimensions(width, height);
     final handle = pixer_resize(_handle, width, height, filter.value);
@@ -260,9 +309,13 @@ final class Pixer {
   }
 
   /// Resizes the image to exact dimensions (may distort aspect ratio)
-  /// 
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer resizeExact(int width, int height, {FilterTypeEnum filter = FilterTypeEnum.Lanczos3}) {
+  Pixer resizeExact(
+    int width,
+    int height, {
+    FilterTypeEnum filter = FilterTypeEnum.Lanczos3,
+  }) {
     _checkDisposed();
     _validateDimensions(width, height);
     final handle = pixer_resize_exact(_handle, width, height, filter.value);
@@ -270,7 +323,7 @@ final class Pixer {
   }
 
   /// Crops the image to the specified rectangle
-  /// 
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer crop(int x, int y, int width, int height) {
     _checkDisposed();
@@ -280,7 +333,7 @@ final class Pixer {
   }
 
   /// Rotates the image 90 degrees clockwise
-  /// 
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer rotate90() {
     _checkDisposed();
@@ -289,7 +342,7 @@ final class Pixer {
   }
 
   /// Rotates the image 180 degrees
-  /// 
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer rotate180() {
     _checkDisposed();
@@ -298,7 +351,7 @@ final class Pixer {
   }
 
   /// Rotates the image 270 degrees clockwise (90 degrees counter-clockwise)
-  /// 
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer rotate270() {
     _checkDisposed();
@@ -307,7 +360,7 @@ final class Pixer {
   }
 
   /// Flips the image horizontally
-  /// 
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer flipHorizontal() {
     _checkDisposed();
@@ -316,7 +369,7 @@ final class Pixer {
   }
 
   /// Flips the image vertically
-  /// 
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer flipVertical() {
     _checkDisposed();
@@ -340,7 +393,7 @@ final class Pixer {
   }
 
   /// Adjusts the brightness of the image
-  /// 
+  ///
   /// [value] is added to each pixel's brightness (can be negative)
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer brightness(int value) {
@@ -350,7 +403,7 @@ final class Pixer {
   }
 
   /// Adjusts the contrast of the image
-  /// 
+  ///
   /// [contrast] is the contrast factor (1.0 = no change, >1.0 = more contrast)
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer contrast(double contrast) {
@@ -360,7 +413,7 @@ final class Pixer {
   }
 
   /// Converts the image to grayscale
-  /// 
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer grayscale() {
     _checkDisposed();
@@ -378,7 +431,7 @@ final class Pixer {
   }
 
   /// Disposes the native resources
-  /// 
+  ///
   /// Call this when the image is no longer needed to prevent memory leaks.
   /// A finalizer provides a fallback, but explicit disposal is recommended.
   void dispose() {

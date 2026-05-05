@@ -65,10 +65,7 @@ pub extern "C" fn pixer_load(path: *const c_char) -> *mut ImageHandle {
 
 /// Load an image from memory buffer
 #[unsafe(no_mangle)]
-pub extern "C" fn pixer_load_from_memory(
-    data: *const u8,
-    len: usize,
-) -> *mut ImageHandle {
+pub extern "C" fn pixer_load_from_memory(data: *const u8, len: usize) -> *mut ImageHandle {
     if data.is_null() || len == 0 {
         return std::ptr::null_mut();
     }
@@ -212,10 +209,7 @@ pub extern "C" fn pixer_load_from_memory_with_format_and_error(
 
 /// Save an image to a file path
 #[unsafe(no_mangle)]
-pub extern "C" fn pixer_save(
-    handle: *const ImageHandle,
-    path: *const c_char,
-) -> ImageErrorCode {
+pub extern "C" fn pixer_save(handle: *const ImageHandle, path: *const c_char) -> ImageErrorCode {
     if handle.is_null() || path.is_null() {
         return ImageErrorCode::InvalidPointer;
     }
@@ -250,6 +244,43 @@ pub extern "C" fn pixer_write_to(
     let img = unsafe { &*(handle as *const DynamicImage) };
 
     match write_to(img, format.to_image_format()) {
+        Ok(buffer) => {
+            let mut boxed = buffer.into_boxed_slice();
+            let len = boxed.len();
+            let ptr = boxed.as_mut_ptr();
+            std::mem::forget(boxed);
+
+            unsafe {
+                *out_data = ptr;
+                *out_len = len;
+            }
+            ImageErrorCode::Success
+        }
+        Err(e) => error_to_code(&e),
+    }
+}
+
+/// Write an image to a JPEG buffer with the specified quality.
+/// Caller must free the buffer using pixer_free_buffer.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixer_write_to_with_quality(
+    handle: *const ImageHandle,
+    format: ImageFormatEnum,
+    quality: u8,
+    out_data: *mut *mut u8,
+    out_len: *mut usize,
+) -> ImageErrorCode {
+    if handle.is_null() || out_data.is_null() || out_len.is_null() {
+        return ImageErrorCode::InvalidPointer;
+    }
+
+    if !matches!(format, ImageFormatEnum::Jpeg) || !(1..=100).contains(&quality) {
+        return ImageErrorCode::InvalidParameter;
+    }
+
+    let img = unsafe { &*(handle as *const DynamicImage) };
+
+    match write_to_jpeg_with_quality(img, quality) {
         Ok(buffer) => {
             let mut boxed = buffer.into_boxed_slice();
             let len = boxed.len();

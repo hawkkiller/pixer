@@ -87,8 +87,7 @@ external ffi.Pointer<ImageHandle> pixer_load_from_memory_with_error(
     ffi.Pointer<ImageErrorCode$1>,
   )
 >(isLeaf: true)
-external ffi.Pointer<ImageHandle>
-pixer_load_from_memory_with_format_and_error(
+external ffi.Pointer<ImageHandle> pixer_load_from_memory_with_format_and_error(
   ffi.Pointer<ffi.Uint8> data,
   int len,
   int format,
@@ -117,6 +116,25 @@ external int pixer_save(
 external int pixer_write_to(
   ffi.Pointer<ImageHandle> handle,
   int format,
+  ffi.Pointer<ffi.Pointer<ffi.Uint8>> out_data,
+  ffi.Pointer<ffi.UintPtr> out_len,
+);
+
+/// Write an image to a JPEG buffer with the specified quality.
+/// Caller must free the buffer using pixer_free_buffer.
+@ffi.Native<
+  ImageErrorCode$1 Function(
+    ffi.Pointer<ImageHandle>,
+    ImageFormatEnum$1,
+    ffi.Uint8,
+    ffi.Pointer<ffi.Pointer<ffi.Uint8>>,
+    ffi.Pointer<ffi.UintPtr>,
+  )
+>(isLeaf: true)
+external int pixer_write_to_with_quality(
+  ffi.Pointer<ImageHandle> handle,
+  int format,
+  int quality,
   ffi.Pointer<ffi.Pointer<ffi.Uint8>> out_data,
   ffi.Pointer<ffi.UintPtr> out_len,
 );
@@ -211,17 +229,13 @@ external ffi.Pointer<ImageHandle> pixer_rotate270(
 @ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>)>(
   isLeaf: true,
 )
-external ffi.Pointer<ImageHandle> pixer_fliph(
-  ffi.Pointer<ImageHandle> handle,
-);
+external ffi.Pointer<ImageHandle> pixer_fliph(ffi.Pointer<ImageHandle> handle);
 
 /// Flip an image vertically
 @ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>)>(
   isLeaf: true,
 )
-external ffi.Pointer<ImageHandle> pixer_flipv(
-  ffi.Pointer<ImageHandle> handle,
-);
+external ffi.Pointer<ImageHandle> pixer_flipv(ffi.Pointer<ImageHandle> handle);
 
 /// Blur an image
 @ffi.Native<
@@ -262,9 +276,7 @@ external ffi.Pointer<ImageHandle> pixer_grayscale(
 @ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>)>(
   isLeaf: true,
 )
-external ffi.Pointer<ImageHandle> pixer_invert(
-  ffi.Pointer<ImageHandle> handle,
-);
+external ffi.Pointer<ImageHandle> pixer_invert(ffi.Pointer<ImageHandle> handle);
 
 /// Filter type for resizing operations
 enum FilterTypeEnum {
@@ -300,6 +312,7 @@ enum ImageErrorCode {
   IoError(5),
   InvalidDimensions(6),
   InvalidPointer(7),
+  InvalidParameter(8),
   Unknown(99);
 
   final int value;
@@ -314,6 +327,7 @@ enum ImageErrorCode {
     5 => IoError,
     6 => InvalidDimensions,
     7 => InvalidPointer,
+    8 => InvalidParameter,
     99 => Unknown,
     _ => throw ArgumentError('Unknown value for ImageErrorCode: $value'),
   };

@@ -1,4 +1,6 @@
-use image::{DynamicImage, ImageFormat, ImageError, imageops::FilterType};
+use image::{
+    DynamicImage, ImageError, ImageFormat, codecs::jpeg::JpegEncoder, imageops::FilterType,
+};
 use std::path::Path;
 
 /// Error codes for image operations
@@ -12,6 +14,7 @@ pub enum ImageErrorCode {
     IoError = 5,
     InvalidDimensions = 6,
     InvalidPointer = 7,
+    InvalidParameter = 8,
     Unknown = 99,
 }
 
@@ -113,22 +116,21 @@ pub fn save_image(img: &DynamicImage, path: &str) -> Result<(), ImageError> {
 }
 
 /// Encode an image to a specific format in memory
-pub fn write_to(
-    img: &DynamicImage,
-    format: ImageFormat,
-) -> Result<Vec<u8>, ImageError> {
+pub fn write_to(img: &DynamicImage, format: ImageFormat) -> Result<Vec<u8>, ImageError> {
     let mut buffer = Vec::new();
     img.write_to(&mut std::io::Cursor::new(&mut buffer), format)?;
     Ok(buffer)
 }
 
+/// Encode an image to JPEG in memory with an explicit quality value.
+pub fn write_to_jpeg_with_quality(img: &DynamicImage, quality: u8) -> Result<Vec<u8>, ImageError> {
+    let mut buffer = Vec::new();
+    img.write_with_encoder(JpegEncoder::new_with_quality(&mut buffer, quality))?;
+    Ok(buffer)
+}
+
 /// Resize an image (preserves aspect ratio, fits within bounds)
-pub fn resize(
-    img: &DynamicImage,
-    width: u32,
-    height: u32,
-    filter: FilterType,
-) -> DynamicImage {
+pub fn resize(img: &DynamicImage, width: u32, height: u32, filter: FilterType) -> DynamicImage {
     img.resize(width, height, filter)
 }
 
@@ -224,6 +226,6 @@ pub fn error_to_code(err: &ImageError) -> ImageErrorCode {
         ImageError::IoError(_) => ImageErrorCode::IoError,
         ImageError::Limits(_) => ImageErrorCode::InvalidDimensions,
         ImageError::Unsupported(_) => ImageErrorCode::UnsupportedFormat,
-        _ => ImageErrorCode::Unknown,
+        ImageError::Parameter(_) => ImageErrorCode::InvalidParameter,
     }
 }

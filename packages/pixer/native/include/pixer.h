@@ -1,5 +1,5 @@
-#ifndef PIXER_H
-#define PIXER_H
+#ifndef FAST_IMAGE_H
+#define FAST_IMAGE_H
 
 #include <stdarg.h>
 #include <stdbool.h>
@@ -40,6 +40,7 @@ enum ImageErrorCode
   IoError = 5,
   InvalidDimensions = 6,
   InvalidPointer = 7,
+  InvalidParameter = 8,
   Unknown = 99,
 };
 #ifndef __cplusplus
@@ -116,8 +117,8 @@ struct ImageHandle *pixer_load_from_memory(const uint8_t *data, uintptr_t len);
  * Load an image from memory with specific format
  */
 struct ImageHandle *pixer_load_from_memory_with_format(const uint8_t *data,
-                                                            uintptr_t len,
-                                                            ImageFormatEnum format);
+                                                       uintptr_t len,
+                                                       ImageFormatEnum format);
 
 /**
  * Load an image from a file path with error code output
@@ -128,16 +129,16 @@ struct ImageHandle *pixer_load_with_error(const char *path, ImageErrorCode *out_
  * Load an image from memory buffer with error code output
  */
 struct ImageHandle *pixer_load_from_memory_with_error(const uint8_t *data,
-                                                           uintptr_t len,
-                                                           ImageErrorCode *out_error);
+                                                      uintptr_t len,
+                                                      ImageErrorCode *out_error);
 
 /**
  * Load an image from memory with specific format and error code output
  */
 struct ImageHandle *pixer_load_from_memory_with_format_and_error(const uint8_t *data,
-                                                                      uintptr_t len,
-                                                                      ImageFormatEnum format,
-                                                                      ImageErrorCode *out_error);
+                                                                 uintptr_t len,
+                                                                 ImageFormatEnum format,
+                                                                 ImageErrorCode *out_error);
 
 /**
  * Save an image to a file path
@@ -149,40 +150,50 @@ ImageErrorCode pixer_save(const struct ImageHandle *handle, const char *path);
  * Caller must free the buffer using pixer_free_buffer
  */
 ImageErrorCode pixer_write_to(const struct ImageHandle *handle,
-                                   ImageFormatEnum format,
-                                   uint8_t **out_data,
-                                   uintptr_t *out_len);
+                              ImageFormatEnum format,
+                              uint8_t **out_data,
+                              uintptr_t *out_len);
+
+/**
+ * Write an image to a JPEG buffer with the specified quality.
+ * Caller must free the buffer using pixer_free_buffer.
+ */
+ImageErrorCode pixer_write_to_with_quality(const struct ImageHandle *handle,
+                                           ImageFormatEnum format,
+                                           uint8_t quality,
+                                           uint8_t **out_data,
+                                           uintptr_t *out_len);
 
 /**
  * Get image metadata
  */
 ImageErrorCode pixer_get_metadata(const struct ImageHandle *handle,
-                                       struct ImageMetadata *out_metadata);
+                                  struct ImageMetadata *out_metadata);
 
 /**
  * Resize an image
  */
 struct ImageHandle *pixer_resize(const struct ImageHandle *handle,
-                                      uint32_t width,
-                                      uint32_t height,
-                                      FilterTypeEnum filter);
+                                 uint32_t width,
+                                 uint32_t height,
+                                 FilterTypeEnum filter);
 
 /**
  * Resize an image to exact dimensions
  */
 struct ImageHandle *pixer_resize_exact(const struct ImageHandle *handle,
-                                            uint32_t width,
-                                            uint32_t height,
-                                            FilterTypeEnum filter);
+                                       uint32_t width,
+                                       uint32_t height,
+                                       FilterTypeEnum filter);
 
 /**
  * Crop an image (immutable)
  */
 struct ImageHandle *pixer_crop_imm(const struct ImageHandle *handle,
-                                        uint32_t x,
-                                        uint32_t y,
-                                        uint32_t width,
-                                        uint32_t height);
+                                   uint32_t x,
+                                   uint32_t y,
+                                   uint32_t width,
+                                   uint32_t height);
 
 /**
  * Rotate an image 90 degrees clockwise
@@ -238,4 +249,4 @@ struct ImageHandle *pixer_invert(const struct ImageHandle *handle);
 }  // extern "C"
 #endif  // __cplusplus
 
-#endif  /* PIXER_H */
+#endif  /* FAST_IMAGE_H */

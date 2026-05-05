@@ -22,6 +22,10 @@ echo "Generating Dart FFI bindings..."
 
 # Run ffigen from the package directory
 cd "$PACKAGE_DIR"
-dart run ffigen --config ffigen.yaml
+if SDK_PATH=$(xcrun --sdk macosx --show-sdk-path 2>/dev/null); then
+  dart run ffigen --config ffigen.yaml --compiler-opts "-isysroot $SDK_PATH"
+else
+  dart run ffigen --config ffigen.yaml
+fi
 
 echo "Done! Bindings generated successfully."
