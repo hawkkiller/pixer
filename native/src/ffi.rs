@@ -204,6 +204,35 @@ pub extern "C" fn pixer_load_from_memory_with_format_and_error(
 }
 
 // ============================================================================
+// Format Detection
+// ============================================================================
+
+/// Guess image format from byte data
+/// Returns the format enum value or ImageErrorCode on error
+#[unsafe(no_mangle)]
+pub extern "C" fn pixer_guess_format(
+    data: *const u8,
+    len: usize,
+    out_format: *mut u32,
+) -> ImageErrorCode {
+    if data.is_null() || len == 0 || out_format.is_null() {
+        return ImageErrorCode::InvalidPointer;
+    }
+
+    let buffer = unsafe { slice::from_raw_parts(data, len) };
+
+    match guess_image_format(buffer) {
+        Ok(format) => {
+            unsafe {
+                *out_format = format as u32;
+            }
+            ImageErrorCode::Success
+        }
+        Err(e) => error_to_code(&e),
+    }
+}
+
+// ============================================================================
 // Image Saving
 // ============================================================================
 

@@ -43,6 +43,19 @@ impl ImageFormatEnum {
             ImageFormatEnum::Tiff => ImageFormat::Tiff,
         }
     }
+
+    pub fn from_image_format(format: ImageFormat) -> Option<Self> {
+        match format {
+            ImageFormat::Png => Some(ImageFormatEnum::Png),
+            ImageFormat::Jpeg => Some(ImageFormatEnum::Jpeg),
+            ImageFormat::Gif => Some(ImageFormatEnum::Gif),
+            ImageFormat::WebP => Some(ImageFormatEnum::WebP),
+            ImageFormat::Bmp => Some(ImageFormatEnum::Bmp),
+            ImageFormat::Ico => Some(ImageFormatEnum::Ico),
+            ImageFormat::Tiff => Some(ImageFormatEnum::Tiff),
+            _ => None,
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -216,6 +229,18 @@ pub fn get_metadata(img: &DynamicImage) -> ImageMetadata {
         height: img.height(),
         color_type,
     }
+}
+
+/// Guess image format from byte data
+pub fn guess_image_format(data: &[u8]) -> Result<ImageFormatEnum, ImageError> {
+    let format = image::guess_format(data)?;
+    ImageFormatEnum::from_image_format(format)
+        .ok_or_else(|| {
+            ImageError::Unsupported(image::error::UnsupportedError::from_format_and_kind(
+                image::error::ImageFormatHint::Unknown,
+                image::error::UnsupportedErrorKind::Format(image::error::ImageFormatHint::Unknown),
+            ))
+        })
 }
 
 /// Convert ImageError to error code

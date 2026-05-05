@@ -42,6 +42,36 @@ final class Pixer {
   /// Whether the native resources have been disposed.
   bool get isDisposed => _isDisposed;
 
+  /// Guesses the image format from byte data.
+  ///
+  /// This is useful for detecting the format before encoding, to check
+  /// if the image is already in the desired format.
+  ///
+  /// Throws [PixerException] if the format cannot be detected.
+  static ImageFormatEnum guessFormat(Uint8List data) {
+    final dataPtr = malloc.allocate<ffi.Uint8>(data.length);
+    final outFormatPtr = malloc.allocate<ffi.Uint32>(ffi.sizeOf<ffi.Uint32>());
+
+    try {
+      dataPtr.asTypedList(data.length).setAll(0, data);
+      final errorCode = pixer_guess_format(
+        dataPtr,
+        data.length,
+        outFormatPtr,
+      );
+      final error = ImageErrorCode.fromValue(errorCode);
+      if (error != ImageErrorCode.Success) {
+        throw PixerException.fromCode(error);
+      }
+
+      final formatValue = outFormatPtr.value;
+      return ImageFormatEnum.fromValue(formatValue);
+    } finally {
+      malloc.free(dataPtr);
+      malloc.free(outFormatPtr);
+    }
+  }
+
   /// Loads an image from a file path
   ///
   /// Throws [InvalidPathException] if the path is empty or invalid.

@@ -22,6 +22,21 @@ external void pixer_free_buffer(ffi.Pointer<ffi.Uint8> ptr, int len);
 @ffi.Native<ffi.Void Function(ffi.Pointer<ImageHandle>)>(isLeaf: true)
 external void pixer_free(ffi.Pointer<ImageHandle> handle);
 
+/// Guess image format from byte data
+/// Returns the format enum value or ImageErrorCode on error
+@ffi.Native<
+  ImageErrorCode$1 Function(
+    ffi.Pointer<ffi.Uint8>,
+    ffi.UintPtr,
+    ffi.Pointer<ffi.Uint32>,
+  )
+>()
+external int pixer_guess_format(
+  ffi.Pointer<ffi.Uint8> data,
+  int len,
+  ffi.Pointer<ffi.Uint32> out_format,
+);
+
 /// Load an image from a file path
 /// Returns null on error
 @ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ffi.Char>)>(
