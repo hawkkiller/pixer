@@ -4,8 +4,9 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 
 import 'bindings/bindings.dart';
-import 'pixer_exception.dart';
 import 'image_metadata.dart';
+import 'pixer_encoder.dart';
+import 'pixer_exception.dart';
 
 /// A fast image processing library
 ///
@@ -234,23 +235,11 @@ final class Pixer {
     }
   }
 
-  /// Encodes the image to a byte buffer in the specified format.
-  ///
-  /// [quality] is supported for JPEG encoding only and must be between 1 and 100.
-  Uint8List encode(ImageFormatEnum format, {int? quality}) {
+  /// Encodes the image to a byte buffer using the provided encoder.
+  Uint8List encode(PixerEncoder encoder) {
     _checkDisposed();
-    if (quality != null) {
-      if (format != ImageFormatEnum.Jpeg) {
-        throw ArgumentError.value(
-          quality,
-          'quality',
-          'is only supported when encoding JPEG images',
-        );
-      }
-      if (quality < 1 || quality > 100) {
-        throw RangeError.range(quality, 1, 100, 'quality');
-      }
-    }
+    final format = encoder.format;
+    final quality = encoder is PixerJpegEncoder ? encoder.quality : null;
 
     final outDataPtr = malloc.allocate<ffi.Pointer<ffi.Uint8>>(
       ffi.sizeOf<ffi.Pointer<ffi.Uint8>>(),

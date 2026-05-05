@@ -1,3 +1,8 @@
+## Unreleased
+
+- **Breaking:** Replaced `Pixer.encode(ImageFormatEnum, {quality})` with encoder objects.
+- Added `PixerJpegEncoder(quality: ...)` with validation.
+
 ## 0.0.4
 
 - Added JPEG quality support to `Pixer.encode()` via `quality`.

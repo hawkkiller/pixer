@@ -6,7 +6,7 @@ Fast, cross-platform image manipulation for Dart, powered by Rust via FFI.
 
 ```yaml
 dependencies:
-  pixer: ^0.0.2
+  pixer: ^0.0.5
 ```
 
 Native binaries are downloaded automatically via Dart build hooks.
@@ -89,8 +89,8 @@ image.resize(800, 600, filter: FilterTypeEnum.Gaussian);
 image.saveToFile('output.webp');
 
 // Encode to bytes
-final pngBytes = image.encode(ImageFormatEnum.Png);
-final jpegBytes = image.encode(ImageFormatEnum.Jpeg);
+final pngBytes = image.encode(const PixerPngEncoder());
+final jpegBytes = image.encode(PixerJpegEncoder(quality: 90));
 ```
 
 ## Metadata
@@ -142,10 +142,11 @@ Linux, macOS, Windows, Android, iOS
 - [x] Crop, rotate (90/180/270), flip (H/V)
 - [x] Adjustments: blur, brightness, contrast, grayscale, invert
 - [x] Metadata access (width, height, color type)
+- [x] Encoder objects with JPEG quality support
 - [x] Full platform support (Linux, macOS, Windows, Android, iOS)
 
 ### Planned — `image` crate
-- [ ] Encoding quality/compression options (JPEG quality, PNG compression level)
+- [ ] Additional encoding options (PNG compression level, progressive JPEG, etc.)
 - [ ] Hue rotation
 - [ ] Sharpen / unsharp mask
 - [ ] Thumbnail generation (optimized fast path)

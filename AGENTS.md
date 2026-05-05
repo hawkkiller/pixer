@@ -26,6 +26,11 @@ dart run ffigen --config ffigen.yaml
 2. Tag and push: `git tag pixer-assets-v1.0.0 && git push origin pixer-assets-v1.0.0`
 3. CI builds all platforms and creates GitHub Release
 
+## Changelog
+
+- Do not modify entries for already released versions. A version heading like `## 0.0.4` means that version is released.
+- Put new changes under `## Unreleased`. If there is no `Unreleased` section, add one above the latest version.
+
 ## Architecture
 
 - Rust code in `native/src/`: `lib.rs` (entry), `api.rs` (image ops), `ffi.rs` (C-compatible API)

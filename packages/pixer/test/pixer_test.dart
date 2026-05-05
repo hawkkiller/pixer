@@ -81,7 +81,7 @@ void main() {
       ]);
 
       final image = Pixer.fromMemory(pngData);
-      final encoded = image.encode(ImageFormatEnum.Png);
+      final encoded = image.encode(const PixerPngEncoder());
       
       expect(encoded, isA<Uint8List>());
       expect(encoded.isNotEmpty, isTrue);
@@ -91,7 +91,7 @@ void main() {
 
     test('encodes JPEG with quality', () {
       final image = Pixer.fromMemory(_transparentPng());
-      final encoded = image.encode(ImageFormatEnum.Jpeg, quality: 90);
+      final encoded = image.encode(PixerJpegEncoder(quality: 90));
 
       expect(encoded, isA<Uint8List>());
       expect(encoded.isNotEmpty, isTrue);
@@ -101,22 +101,23 @@ void main() {
     });
 
     test('validates JPEG quality', () {
-      final image = Pixer.fromMemory(_transparentPng());
-
       expect(
-        () => image.encode(ImageFormatEnum.Png, quality: 90),
-        throwsA(isA<ArgumentError>()),
-      );
-      expect(
-        () => image.encode(ImageFormatEnum.Jpeg, quality: 0),
+        () => PixerJpegEncoder(quality: -1),
         throwsA(isA<RangeError>()),
       );
       expect(
-        () => image.encode(ImageFormatEnum.Jpeg, quality: 101),
+        () => PixerJpegEncoder(quality: 0),
         throwsA(isA<RangeError>()),
       );
+      expect(
+        () => PixerJpegEncoder(quality: 101),
+        throwsA(isA<RangeError>()),
+      );
+    });
 
-      image.dispose();
+    test('non-JPEG encoders have no quality option', () {
+      const encoder = PixerPngEncoder();
+      expect(encoder, isA<PixerEncoder>());
     });
 
     test('throws when using disposed image', () {
@@ -219,14 +220,14 @@ void main() {
       ]);
 
       final original = Pixer.fromMemory(pngData);
-      final originalBytes = original.encode(ImageFormatEnum.Png);
+      final originalBytes = original.encode(const PixerPngEncoder());
 
       // Invert should return a NEW image
       final inverted = original.invert();
 
       // Original should still be usable and unchanged
       expect(original.isDisposed, isFalse);
-      final originalBytesAfter = original.encode(ImageFormatEnum.Png);
+      final originalBytesAfter = original.encode(const PixerPngEncoder());
       expect(originalBytesAfter, equals(originalBytes));
 
       // Inverted should be a different image
