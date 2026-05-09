@@ -4,7 +4,7 @@ import 'package:pixer/pixer.dart';
 /// Benchmark for resizing images using the pixer package
 class PixerResizeBenchmark extends BenchmarkBase {
   PixerResizeBenchmark(this.targetWidth, this.targetHeight)
-      : super('pixer.resize_${targetWidth}x$targetHeight');
+    : super('pixer.resize_${targetWidth}x$targetHeight');
 
   final int targetWidth;
   final int targetHeight;
@@ -60,7 +60,7 @@ class PixerEncodeBenchmark extends BenchmarkBase {
 
   @override
   void run() {
-    image.encode(ImageFormatEnum.Jpeg);
+    image.encode(PixerJpegEncoder(quality: 100));
   }
 }
 
