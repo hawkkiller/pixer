@@ -17,7 +17,7 @@ It uses Rust's image crate via FFI to provide high-performance image processing.
 # Examples: -omacos -aarm64, -olinux -ax64, -oandroid -aarm64
 dart tool/build.dart -o<os> -a<arch>
 # Generate FFI bindings (after changing native/src/ffi.rs)
-dart run ffigen --config ffigen.yaml
+dart run tool/generate_bindings.dart
 ```
 
 ## Release

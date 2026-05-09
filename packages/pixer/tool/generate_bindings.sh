@@ -20,12 +20,8 @@ echo "Header generated: $HEADER_FILE"
 
 echo "Generating Dart FFI bindings..."
 
-# Run ffigen from the package directory
+# Run ffigen via the Dart API from the package directory
 cd "$PACKAGE_DIR"
-if SDK_PATH=$(xcrun --sdk macosx --show-sdk-path 2>/dev/null); then
-  dart run ffigen --config ffigen.yaml --compiler-opts "-isysroot $SDK_PATH"
-else
-  dart run ffigen --config ffigen.yaml
-fi
+dart run tool/generate_bindings.dart
 
 echo "Done! Bindings generated successfully."
