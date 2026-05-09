@@ -1,5 +1,10 @@
 ## Unreleased
 
+- refactor: replace native_toolchain_rs with native_toolchain_rust.
+- refactor: simplify Rust code, remove api.rs.
+
+## 0.0.5
+
 - **Breaking:** Replaced `Pixer.encode(ImageFormatEnum, {quality})` with encoder objects.
 - Added `PixerJpegEncoder(quality: ...)` with validation.
 

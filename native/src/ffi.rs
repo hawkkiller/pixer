@@ -83,11 +83,12 @@ pub struct ImageMetadata {
     pub color_type: u8,
 }
 
-fn handle_cast(handle: *const ImageHandle) -> Option<&'static DynamicImage> {
+fn with_image<R>(handle: *const ImageHandle, f: impl FnOnce(&DynamicImage) -> R) -> Option<R> {
     if handle.is_null() {
         None
     } else {
-        Some(unsafe { &*(handle as *const DynamicImage) })
+        let img = unsafe { &*(handle as *const DynamicImage) };
+        Some(f(img))
     }
 }
 
@@ -327,17 +328,18 @@ pub extern "C" fn pixer_load_from_memory_with_format_and_error(
 /// Save an image to a file path
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_save(handle: *const ImageHandle, path: *const c_char) -> ImageErrorCode {
-    let Some(img) = handle_cast(handle) else {
-        return ImageErrorCode::InvalidPointer;
-    };
     if path.is_null() {
         return ImageErrorCode::InvalidPointer;
     }
 
-    match cstr_to_str(path).and_then(|p| img.save(Path::new(&p)).map_err(|e| error_to_code(&e))) {
-        Ok(_) => ImageErrorCode::Success,
-        Err(code) => code,
-    }
+    with_image(handle, |img| {
+        match cstr_to_str(path).and_then(|p| img.save(Path::new(&p)).map_err(|e| error_to_code(&e)))
+        {
+            Ok(_) => ImageErrorCode::Success,
+            Err(code) => code,
+        }
+    })
+    .unwrap_or(ImageErrorCode::InvalidPointer)
 }
 
 /// Write an image to a buffer in the specified format
@@ -349,23 +351,24 @@ pub extern "C" fn pixer_write_to(
     out_data: *mut *mut u8,
     out_len: *mut usize,
 ) -> ImageErrorCode {
-    let Some(img) = handle_cast(handle) else {
-        return ImageErrorCode::InvalidPointer;
-    };
     if out_data.is_null() || out_len.is_null() {
         return ImageErrorCode::InvalidPointer;
     }
-    match {
-        let mut cursor = std::io::Cursor::new(Vec::new());
-        img.write_to(&mut cursor, format.to_image_format())
-            .map(|_| cursor.into_inner())
-    } {
-        Ok(buffer) => {
-            buffer_output(buffer, out_data, out_len);
-            ImageErrorCode::Success
+
+    with_image(handle, |img| {
+        match {
+            let mut cursor = std::io::Cursor::new(Vec::new());
+            img.write_to(&mut cursor, format.to_image_format())
+                .map(|_| cursor.into_inner())
+        } {
+            Ok(buffer) => {
+                buffer_output(buffer, out_data, out_len);
+                ImageErrorCode::Success
+            }
+            Err(e) => error_to_code(&e),
         }
-        Err(e) => error_to_code(&e),
-    }
+    })
+    .unwrap_or(ImageErrorCode::InvalidPointer)
 }
 
 /// Write an image to a JPEG buffer with the specified quality.
@@ -378,9 +381,6 @@ pub extern "C" fn pixer_write_to_with_quality(
     out_data: *mut *mut u8,
     out_len: *mut usize,
 ) -> ImageErrorCode {
-    let Some(img) = handle_cast(handle) else {
-        return ImageErrorCode::InvalidPointer;
-    };
     if out_data.is_null() || out_len.is_null() {
         return ImageErrorCode::InvalidPointer;
     }
@@ -389,13 +389,16 @@ pub extern "C" fn pixer_write_to_with_quality(
         return ImageErrorCode::InvalidParameter;
     }
 
-    match write_to_jpeg_with_quality(img, quality) {
-        Ok(buffer) => {
-            buffer_output(buffer, out_data, out_len);
-            ImageErrorCode::Success
+    with_image(handle, |img| {
+        match write_to_jpeg_with_quality(img, quality) {
+            Ok(buffer) => {
+                buffer_output(buffer, out_data, out_len);
+                ImageErrorCode::Success
+            }
+            Err(e) => error_to_code(&e),
         }
-        Err(e) => error_to_code(&e),
-    }
+    })
+    .unwrap_or(ImageErrorCode::InvalidPointer)
 }
 
 // ============================================================================
@@ -408,14 +411,16 @@ pub extern "C" fn pixer_get_metadata(
     handle: *const ImageHandle,
     out_metadata: *mut ImageMetadata,
 ) -> ImageErrorCode {
-    let Some(img) = handle_cast(handle) else {
-        return ImageErrorCode::InvalidPointer;
-    };
     if out_metadata.is_null() {
         return ImageErrorCode::InvalidPointer;
     }
+
+    let Some(metadata) = with_image(handle, get_metadata) else {
+        return ImageErrorCode::InvalidPointer;
+    };
+
     unsafe {
-        *out_metadata = get_metadata(img);
+        *out_metadata = metadata;
     }
     ImageErrorCode::Success
 }
@@ -432,9 +437,14 @@ pub extern "C" fn pixer_resize(
     height: u32,
     filter: FilterTypeEnum,
 ) -> *mut ImageHandle {
-    handle_cast(handle)
-        .map(|img| into_handle(img.resize(width, height, filter.to_filter_type())))
-        .unwrap_or(std::ptr::null_mut())
+    if width == 0 || height == 0 {
+        return std::ptr::null_mut();
+    }
+
+    with_image(handle, |img| {
+        into_handle(img.resize(width, height, filter.to_filter_type()))
+    })
+    .unwrap_or(std::ptr::null_mut())
 }
 
 /// Resize an image to exact dimensions
@@ -445,9 +455,14 @@ pub extern "C" fn pixer_resize_exact(
     height: u32,
     filter: FilterTypeEnum,
 ) -> *mut ImageHandle {
-    handle_cast(handle)
-        .map(|img| into_handle(img.resize_exact(width, height, filter.to_filter_type())))
-        .unwrap_or(std::ptr::null_mut())
+    if width == 0 || height == 0 {
+        return std::ptr::null_mut();
+    }
+
+    with_image(handle, |img| {
+        into_handle(img.resize_exact(width, height, filter.to_filter_type()))
+    })
+    .unwrap_or(std::ptr::null_mut())
 }
 
 /// Crop an image (immutable)
@@ -459,49 +474,55 @@ pub extern "C" fn pixer_crop_imm(
     width: u32,
     height: u32,
 ) -> *mut ImageHandle {
-    handle_cast(handle)
-        .map(|img| into_handle(img.crop_imm(x, y, width, height)))
-        .unwrap_or(std::ptr::null_mut())
+    if width == 0 || height == 0 {
+        return std::ptr::null_mut();
+    }
+
+    with_image(handle, |img| {
+        let Some(max_x) = x.checked_add(width) else {
+            return std::ptr::null_mut();
+        };
+        let Some(max_y) = y.checked_add(height) else {
+            return std::ptr::null_mut();
+        };
+
+        if max_x > img.width() || max_y > img.height() {
+            return std::ptr::null_mut();
+        }
+
+        into_handle(img.crop_imm(x, y, width, height))
+    })
+    .unwrap_or(std::ptr::null_mut())
 }
 
 /// Rotate an image 90 degrees clockwise
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_rotate90(handle: *const ImageHandle) -> *mut ImageHandle {
-    handle_cast(handle)
-        .map(|img| into_handle(img.rotate90()))
-        .unwrap_or(std::ptr::null_mut())
+    with_image(handle, |img| into_handle(img.rotate90())).unwrap_or(std::ptr::null_mut())
 }
 
 /// Rotate an image 180 degrees
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_rotate180(handle: *const ImageHandle) -> *mut ImageHandle {
-    handle_cast(handle)
-        .map(|img| into_handle(img.rotate180()))
-        .unwrap_or(std::ptr::null_mut())
+    with_image(handle, |img| into_handle(img.rotate180())).unwrap_or(std::ptr::null_mut())
 }
 
 /// Rotate an image 270 degrees clockwise
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_rotate270(handle: *const ImageHandle) -> *mut ImageHandle {
-    handle_cast(handle)
-        .map(|img| into_handle(img.rotate270()))
-        .unwrap_or(std::ptr::null_mut())
+    with_image(handle, |img| into_handle(img.rotate270())).unwrap_or(std::ptr::null_mut())
 }
 
 /// Flip an image horizontally
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_fliph(handle: *const ImageHandle) -> *mut ImageHandle {
-    handle_cast(handle)
-        .map(|img| into_handle(img.fliph()))
-        .unwrap_or(std::ptr::null_mut())
+    with_image(handle, |img| into_handle(img.fliph())).unwrap_or(std::ptr::null_mut())
 }
 
 /// Flip an image vertically
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_flipv(handle: *const ImageHandle) -> *mut ImageHandle {
-    handle_cast(handle)
-        .map(|img| into_handle(img.flipv()))
-        .unwrap_or(std::ptr::null_mut())
+    with_image(handle, |img| into_handle(img.flipv())).unwrap_or(std::ptr::null_mut())
 }
 
 // ============================================================================
@@ -511,43 +532,45 @@ pub extern "C" fn pixer_flipv(handle: *const ImageHandle) -> *mut ImageHandle {
 /// Blur an image
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_blur(handle: *const ImageHandle, sigma: f32) -> *mut ImageHandle {
-    handle_cast(handle)
-        .map(|img| into_handle(img.blur(sigma)))
-        .unwrap_or(std::ptr::null_mut())
+    if !sigma.is_finite() || sigma < 0.0 {
+        return std::ptr::null_mut();
+    }
+
+    with_image(handle, |img| into_handle(img.blur(sigma))).unwrap_or(std::ptr::null_mut())
 }
 
 /// Brighten the pixels of an image
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_brighten(handle: *const ImageHandle, value: i32) -> *mut ImageHandle {
-    handle_cast(handle)
-        .map(|img| into_handle(img.brighten(value)))
-        .unwrap_or(std::ptr::null_mut())
+    with_image(handle, |img| into_handle(img.brighten(value))).unwrap_or(std::ptr::null_mut())
 }
 
 /// Adjust contrast
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_adjust_contrast(handle: *const ImageHandle, c: f32) -> *mut ImageHandle {
-    handle_cast(handle)
-        .map(|img| into_handle(img.adjust_contrast(c)))
-        .unwrap_or(std::ptr::null_mut())
+    if !c.is_finite() {
+        return std::ptr::null_mut();
+    }
+
+    with_image(handle, |img| into_handle(img.adjust_contrast(c))).unwrap_or(std::ptr::null_mut())
 }
 
 /// Convert to grayscale
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_grayscale(handle: *const ImageHandle) -> *mut ImageHandle {
-    handle_cast(handle)
-        .map(|img| into_handle(DynamicImage::ImageLuma8(img.to_luma8())))
-        .unwrap_or(std::ptr::null_mut())
+    with_image(handle, |img| {
+        into_handle(DynamicImage::ImageLuma8(img.to_luma8()))
+    })
+    .unwrap_or(std::ptr::null_mut())
 }
 
 /// Invert colors (returns new image)
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_invert(handle: *const ImageHandle) -> *mut ImageHandle {
-    handle_cast(handle)
-        .map(|img| {
-            let mut cloned = img.clone();
-            cloned.invert();
-            into_handle(cloned)
-        })
-        .unwrap_or(std::ptr::null_mut())
+    with_image(handle, |img| {
+        let mut cloned = img.clone();
+        cloned.invert();
+        into_handle(cloned)
+    })
+    .unwrap_or(std::ptr::null_mut())
 }
