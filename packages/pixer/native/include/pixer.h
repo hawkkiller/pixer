@@ -6,9 +6,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-/**
- * Filter type for resizing operations
- */
 enum FilterTypeEnum
 #ifdef __cplusplus
   : uint32_t
@@ -24,9 +21,6 @@ enum FilterTypeEnum
 typedef uint32_t FilterTypeEnum;
 #endif // __cplusplus
 
-/**
- * Error codes for image operations
- */
 enum ImageErrorCode
 #ifdef __cplusplus
   : uint32_t
@@ -47,9 +41,6 @@ enum ImageErrorCode
 typedef uint32_t ImageErrorCode;
 #endif // __cplusplus
 
-/**
- * Image format enum for encoding/decoding
- */
 enum ImageFormatEnum
 #ifdef __cplusplus
   : uint32_t
@@ -67,16 +58,10 @@ enum ImageFormatEnum
 typedef uint32_t ImageFormatEnum;
 #endif // __cplusplus
 
-/**
- * Opaque handle to an image
- */
 typedef struct ImageHandle {
   uint8_t _private[0];
 } ImageHandle;
 
-/**
- * Image metadata structure
- */
 typedef struct ImageMetadata {
   uint32_t width;
   uint32_t height;

@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:ffigen/ffigen.dart';
 
-final _pixerSymbol = RegExp(r'^pixer_.*$');
+const _leafSymbols = {'pixer_free_string', 'pixer_free_buffer', 'pixer_free', 'pixer_get_metadata'};
 
 void main() {
   final packageDir = File.fromUri(Platform.script).absolute.parent.parent.uri;
@@ -27,7 +27,7 @@ void main() {
     ),
     functions: Functions(
       include: Declarations.includeAll,
-      isLeaf: (declaration) => _pixerSymbol.hasMatch(declaration.originalName),
+      isLeaf: (declaration) => _leafSymbols.contains(declaration.originalName),
     ),
     structs: const Structs(
       include: Declarations.includeAll,

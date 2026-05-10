@@ -2,6 +2,7 @@
 
 - refactor: replace native_toolchain_rs with native_toolchain_rust.
 - refactor: simplify Rust code, remove api.rs.
+- Simplified encoder API and native implementation to keep only JPEG quality as a configurable encoding option.
 
 ## 0.0.5
 

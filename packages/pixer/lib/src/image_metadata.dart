@@ -5,10 +5,13 @@ import 'bindings/bindings.dart';
 enum ColorType {
   /// Grayscale
   l(0),
+
   /// Grayscale with alpha
   la(1),
+
   /// RGB
   rgb(2),
+
   /// RGBA
   rgba(3);
 
@@ -27,11 +30,7 @@ enum ColorType {
 
 /// Metadata about an image
 class PixerMetadata {
-  const PixerMetadata({
-    required this.width,
-    required this.height,
-    required this.colorType,
-  });
+  const PixerMetadata({required this.width, required this.height, required this.colorType});
 
   /// Image width in pixels
   final int width;
@@ -53,7 +52,8 @@ class PixerMetadata {
   }
 
   @override
-  String toString() => 'PixerMetadata(width: $width, height: $height, colorType: ${colorType.name})';
+  String toString() =>
+      'PixerMetadata(width: $width, height: $height, colorType: ${colorType.name})';
 
   @override
   bool operator ==(Object other) =>

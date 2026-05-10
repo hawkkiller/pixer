@@ -74,6 +74,5 @@ BuildInput createBuildInput(String osString, String architecture, String? iOSSdk
       ),
     );
 
-
   return inputBuilder.build();
 }

@@ -7,7 +7,7 @@ import 'package:image/image.dart';
 /// Benchmark for resizing images using the dart image package
 class DartImageResizeBenchmark extends BenchmarkBase {
   DartImageResizeBenchmark(this.targetWidth, this.targetHeight)
-      : super('dart_image.resize_${targetWidth}x$targetHeight');
+    : super('dart_image.resize_${targetWidth}x$targetHeight');
 
   final int targetWidth;
   final int targetHeight;

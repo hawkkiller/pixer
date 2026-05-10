@@ -146,7 +146,6 @@ Linux, macOS, Windows, Android, iOS
 - [x] Full platform support (Linux, macOS, Windows, Android, iOS)
 
 ### Planned — `image` crate
-- [ ] Additional encoding options (PNG compression level, progressive JPEG, etc.)
 - [ ] Hue rotation
 - [ ] Sharpen / unsharp mask
 - [ ] Thumbnail generation (optimized fast path)
