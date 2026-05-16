@@ -1,3 +1,7 @@
+## 0.0.8
+
+- Provide example and improve pubdev points.
+
 ## 0.0.7
 
 - Added externalSize to the NativeFinalizer, which significantly improves Garbage Collection performance.

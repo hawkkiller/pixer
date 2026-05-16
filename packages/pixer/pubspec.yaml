@@ -1,6 +1,6 @@
 name: pixer
-description: A fast image processing package.
-version: 0.0.7
+description: High-performance Dart image manipulation backed by Rust FFI for resizing, cropping, encoding, and thumbnail generation in apps and tools.
+version: 0.0.8
 resolution: workspace
 repository: https://github.com/hawkkiller/pixer
 
