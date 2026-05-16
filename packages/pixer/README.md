@@ -6,7 +6,7 @@ Fast, cross-platform image manipulation for Dart, powered by Rust via FFI.
 
 ```yaml
 dependencies:
-  pixer: ^0.0.6
+  pixer: ^0.0.7
 ```
 
 Native binaries are downloaded automatically via Dart build hooks.
@@ -108,7 +108,9 @@ print('${image.width}x${image.height}');
 
 ## Resource Management
 
-Every `Pixer` owns a native handle. Call `dispose()` when done — including intermediates in a pipeline. A finalizer is a safety net, not a strategy: it may not run, especially across isolates.
+Every `Pixer` owns a native handle. Call `dispose()` when done — including intermediates in a pipeline.
+Each pixer is assigned a finalizer, which frees the native handle when the pixer is garbage collected.
+However, the finalizer is not guaranteed to run, especially across isolates. It is **strongly recommended** to call `dispose()` explicitly.
 
 ```dart
 final image = Pixer.fromFile('input.jpg');

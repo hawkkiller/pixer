@@ -29,18 +29,44 @@ import 'pixer_exception.dart';
 /// resized.dispose();
 /// image.dispose();
 /// ```
-final class Pixer {
+final class Pixer implements ffi.Finalizable {
   Pixer._(this._handle) : assert(_handle != ffi.nullptr) {
-    _finalizer.attach(this, _handle, detach: this);
+    _finalizer.attach(
+      this,
+      _handle.cast(),
+      detach: this,
+      externalSize: _estimateExternalSize(_handle),
+    );
   }
 
-  static final Finalizer<ffi.Pointer<ImageHandle>> _finalizer = Finalizer(
-    (handle) => pixer_free(handle),
+  static final _finalizer = ffi.NativeFinalizer(
+    ffi.Native.addressOf<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ImageHandle>)>>(
+      pixer_free,
+    ).cast(),
   );
 
   final ffi.Pointer<ImageHandle> _handle;
   bool _isDisposed = false;
   PixerMetadata? _cachedMetadata;
+
+  static int _estimateExternalSize(ffi.Pointer<ImageHandle> handle) {
+    final metadataPtr = malloc.allocate<ImageMetadata>(ffi.sizeOf<ImageMetadata>());
+    try {
+      final errorCode = pixer_get_metadata(handle, metadataPtr);
+      if (errorCode != 0) return 0;
+
+      final metadata = PixerMetadata.fromNative(metadataPtr);
+      final bytesPerPixel = switch (metadata.colorType) {
+        ColorType.luminance => 1,
+        ColorType.luminanceAlpha => 2,
+        ColorType.rgb => 3,
+        ColorType.rgba => 4,
+      };
+      return metadata.width * metadata.height * bytesPerPixel;
+    } finally {
+      malloc.free(metadataPtr);
+    }
+  }
 
   /// Whether the native resources have been disposed.
   bool get isDisposed => _isDisposed;
@@ -82,11 +108,7 @@ final class Pixer {
     final errorPtr = malloc.allocate<ffi.Uint32>(ffi.sizeOf<ffi.Uint32>());
     try {
       dataPtr.asTypedList(data.length).setAll(0, data);
-      final handle = pixer_load_from_memory_with_error(
-        dataPtr,
-        data.length,
-        errorPtr,
-      );
+      final handle = pixer_load_from_memory_with_error(dataPtr, data.length, errorPtr);
       if (handle == ffi.nullptr) {
         final errorCode = ImageErrorCode.fromValue(errorPtr.value);
         throw PixerException.fromCode(errorCode, context: 'input: memory');
@@ -118,10 +140,7 @@ final class Pixer {
       );
       if (handle == ffi.nullptr) {
         final errorCode = ImageErrorCode.fromValue(errorPtr.value);
-        throw PixerException.fromCode(
-          errorCode,
-          context: 'input: memory, format: ${format.name}',
-        );
+        throw PixerException.fromCode(errorCode, context: 'input: memory, format: ${format.name}');
       }
       return Pixer._(handle);
     } finally {
@@ -139,9 +158,7 @@ final class Pixer {
 
   void _validateDimensions(int width, int height, {String? context}) {
     if (width <= 0 || height <= 0) {
-      throw InvalidDimensionsException(
-        context ?? 'width and height must be > 0',
-      );
+      throw InvalidDimensionsException(context ?? 'width and height must be > 0');
     }
   }
 
@@ -149,11 +166,7 @@ final class Pixer {
     if (x < 0 || y < 0) {
       throw InvalidDimensionsException('x and y must be >= 0');
     }
-    _validateDimensions(
-      width,
-      height,
-      context: 'crop width and height must be > 0',
-    );
+    _validateDimensions(width, height, context: 'crop width and height must be > 0');
 
     // Bounds validation
     final meta = getMetadata();
@@ -192,9 +205,7 @@ final class Pixer {
     _checkDisposed();
     if (_cachedMetadata != null) return _cachedMetadata!;
 
-    final metadataPtr = malloc.allocate<ImageMetadata>(
-      ffi.sizeOf<ImageMetadata>(),
-    );
+    final metadataPtr = malloc.allocate<ImageMetadata>(ffi.sizeOf<ImageMetadata>());
     try {
       final errorCode = pixer_get_metadata(_handle, metadataPtr);
       final error = _errorFromValue(errorCode);
@@ -255,11 +266,7 @@ final class Pixer {
   /// [resizeExact] to force exact dimensions.
   ///
   /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer resize(
-    int width,
-    int height, {
-    FilterTypeEnum filter = FilterTypeEnum.Lanczos3,
-  }) {
+  Pixer resize(int width, int height, {FilterTypeEnum filter = FilterTypeEnum.Lanczos3}) {
     _checkDisposed();
     _validateDimensions(width, height);
     final handle = pixer_resize(_handle, width, height, filter.value);
@@ -272,11 +279,7 @@ final class Pixer {
   /// aspect ratio.
   ///
   /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer resizeExact(
-    int width,
-    int height, {
-    FilterTypeEnum filter = FilterTypeEnum.Lanczos3,
-  }) {
+  Pixer resizeExact(int width, int height, {FilterTypeEnum filter = FilterTypeEnum.Lanczos3}) {
     _checkDisposed();
     _validateDimensions(width, height);
     final handle = pixer_resize_exact(_handle, width, height, filter.value);

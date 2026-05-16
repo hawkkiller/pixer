@@ -1,3 +1,7 @@
+## 0.0.7
+
+- Added externalSize to the NativeFinalizer, which significantly improves Garbage Collection performance.
+
 ## 0.0.6
 
 - **Breaking:** Merged `Pixer.encodeWith(PixerEncoder)` into `Pixer.encode(PixerEncoder)`; the old `encode(ImageFormatEnum)` overload is gone. Use `image.encode(const PixerPngEncoder())` etc.

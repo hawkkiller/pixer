@@ -94,13 +94,7 @@ final class PixerJpegEncoder extends PixerEncoder {
   Uint8List encode(ffi.Pointer<ImageHandle> handle) {
     return _encodeWith(
       write: (outDataPtr, outLenPtr) {
-        return pixer_write_to_with_quality(
-          handle,
-          format.value,
-          quality,
-          outDataPtr,
-          outLenPtr,
-        );
+        return pixer_write_to_with_quality(handle, format.value, quality, outDataPtr, outLenPtr);
       },
       context: 'format: ${format.name}, quality: $quality',
     );

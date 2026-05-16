@@ -1,6 +1,6 @@
 name: pixer
 description: A fast image processing package.
-version: 0.0.6
+version: 0.0.7
 resolution: workspace
 repository: https://github.com/hawkkiller/pixer
 

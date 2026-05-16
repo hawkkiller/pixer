@@ -13,9 +13,7 @@ import 'dart:ffi' as ffi;
 external void pixer_free_string(ffi.Pointer<ffi.Char> ptr);
 
 /// Free image data buffer
-@ffi.Native<ffi.Void Function(ffi.Pointer<ffi.Uint8>, ffi.UintPtr)>(
-  isLeaf: true,
-)
+@ffi.Native<ffi.Void Function(ffi.Pointer<ffi.Uint8>, ffi.UintPtr)>(isLeaf: true)
 external void pixer_free_buffer(ffi.Pointer<ffi.Uint8> ptr, int len);
 
 /// Free an image handle
@@ -28,21 +26,12 @@ external void pixer_free(ffi.Pointer<ImageHandle> handle);
 external ffi.Pointer<ImageHandle> pixer_load(ffi.Pointer<ffi.Char> path);
 
 /// Load an image from memory buffer
-@ffi.Native<
-  ffi.Pointer<ImageHandle> Function(ffi.Pointer<ffi.Uint8>, ffi.UintPtr)
->()
-external ffi.Pointer<ImageHandle> pixer_load_from_memory(
-  ffi.Pointer<ffi.Uint8> data,
-  int len,
-);
+@ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ffi.Uint8>, ffi.UintPtr)>()
+external ffi.Pointer<ImageHandle> pixer_load_from_memory(ffi.Pointer<ffi.Uint8> data, int len);
 
 /// Load an image from memory with specific format
 @ffi.Native<
-  ffi.Pointer<ImageHandle> Function(
-    ffi.Pointer<ffi.Uint8>,
-    ffi.UintPtr,
-    ImageFormatEnum$1,
-  )
+  ffi.Pointer<ImageHandle> Function(ffi.Pointer<ffi.Uint8>, ffi.UintPtr, ImageFormatEnum$1)
 >()
 external ffi.Pointer<ImageHandle> pixer_load_from_memory_with_format(
   ffi.Pointer<ffi.Uint8> data,
@@ -52,10 +41,7 @@ external ffi.Pointer<ImageHandle> pixer_load_from_memory_with_format(
 
 /// Load an image from a file path with error code output
 @ffi.Native<
-  ffi.Pointer<ImageHandle> Function(
-    ffi.Pointer<ffi.Char>,
-    ffi.Pointer<ImageErrorCode$1>,
-  )
+  ffi.Pointer<ImageHandle> Function(ffi.Pointer<ffi.Char>, ffi.Pointer<ImageErrorCode$1>)
 >()
 external ffi.Pointer<ImageHandle> pixer_load_with_error(
   ffi.Pointer<ffi.Char> path,
@@ -93,13 +79,8 @@ external ffi.Pointer<ImageHandle> pixer_load_from_memory_with_format_and_error(
 );
 
 /// Save an image to a file path
-@ffi.Native<
-  ImageErrorCode$1 Function(ffi.Pointer<ImageHandle>, ffi.Pointer<ffi.Char>)
->()
-external int pixer_save(
-  ffi.Pointer<ImageHandle> handle,
-  ffi.Pointer<ffi.Char> path,
-);
+@ffi.Native<ImageErrorCode$1 Function(ffi.Pointer<ImageHandle>, ffi.Pointer<ffi.Char>)>()
+external int pixer_save(ffi.Pointer<ImageHandle> handle, ffi.Pointer<ffi.Char> path);
 
 /// Write an image to a buffer in the specified format
 /// Caller must free the buffer using pixer_free_buffer
@@ -141,12 +122,9 @@ external int pixer_write_to_with_quality(
 );
 
 /// Get image metadata
-@ffi.Native<
-  ImageErrorCode$1 Function(
-    ffi.Pointer<ImageHandle>,
-    ffi.Pointer<ImageMetadata>,
-  )
->(isLeaf: true)
+@ffi.Native<ImageErrorCode$1 Function(ffi.Pointer<ImageHandle>, ffi.Pointer<ImageMetadata>)>(
+  isLeaf: true,
+)
 external int pixer_get_metadata(
   ffi.Pointer<ImageHandle> handle,
   ffi.Pointer<ImageMetadata> out_metadata,
@@ -211,21 +189,15 @@ external ffi.Pointer<ImageHandle> pixer_crop_imm(
 
 /// Rotate an image 90 degrees clockwise
 @ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>)>()
-external ffi.Pointer<ImageHandle> pixer_rotate90(
-  ffi.Pointer<ImageHandle> handle,
-);
+external ffi.Pointer<ImageHandle> pixer_rotate90(ffi.Pointer<ImageHandle> handle);
 
 /// Rotate an image 180 degrees
 @ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>)>()
-external ffi.Pointer<ImageHandle> pixer_rotate180(
-  ffi.Pointer<ImageHandle> handle,
-);
+external ffi.Pointer<ImageHandle> pixer_rotate180(ffi.Pointer<ImageHandle> handle);
 
 /// Rotate an image 270 degrees clockwise
 @ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>)>()
-external ffi.Pointer<ImageHandle> pixer_rotate270(
-  ffi.Pointer<ImageHandle> handle,
-);
+external ffi.Pointer<ImageHandle> pixer_rotate270(ffi.Pointer<ImageHandle> handle);
 
 /// Flip an image horizontally
 @ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>)>()
@@ -238,44 +210,27 @@ external ffi.Pointer<ImageHandle> pixer_flipv(ffi.Pointer<ImageHandle> handle);
 /// Apply a Gaussian blur with the given standard deviation in pixels.
 ///
 /// `sigma` must be finite and `>= 0`. `sigma == 0` returns an unchanged copy.
-@ffi.Native<
-  ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>, ffi.Float)
->()
-external ffi.Pointer<ImageHandle> pixer_blur(
-  ffi.Pointer<ImageHandle> handle,
-  double sigma,
-);
+@ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>, ffi.Float)>()
+external ffi.Pointer<ImageHandle> pixer_blur(ffi.Pointer<ImageHandle> handle, double sigma);
 
 /// Add `value` to every channel of every pixel.
 ///
 /// Values are clamped per-channel to `[0, 255]`. Negative values darken,
 /// positive values brighten. The practical range is roughly `-255..=255`;
 /// larger magnitudes simply saturate.
-@ffi.Native<
-  ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>, ffi.Int32)
->()
-external ffi.Pointer<ImageHandle> pixer_brighten(
-  ffi.Pointer<ImageHandle> handle,
-  int value,
-);
+@ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>, ffi.Int32)>()
+external ffi.Pointer<ImageHandle> pixer_brighten(ffi.Pointer<ImageHandle> handle, int value);
 
 /// Adjust contrast around the midpoint.
 ///
 /// `c == 0.0` leaves the image unchanged. Positive values increase contrast,
 /// negative values decrease it. `c` must be finite.
-@ffi.Native<
-  ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>, ffi.Float)
->()
-external ffi.Pointer<ImageHandle> pixer_adjust_contrast(
-  ffi.Pointer<ImageHandle> handle,
-  double c,
-);
+@ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>, ffi.Float)>()
+external ffi.Pointer<ImageHandle> pixer_adjust_contrast(ffi.Pointer<ImageHandle> handle, double c);
 
 /// Convert to grayscale
 @ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>)>()
-external ffi.Pointer<ImageHandle> pixer_grayscale(
-  ffi.Pointer<ImageHandle> handle,
-);
+external ffi.Pointer<ImageHandle> pixer_grayscale(ffi.Pointer<ImageHandle> handle);
 
 /// Invert colors (returns new image)
 @ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>)>()
