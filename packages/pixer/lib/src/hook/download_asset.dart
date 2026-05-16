@@ -8,6 +8,8 @@ import 'package:pixer/src/hook/version.dart';
 Uri downloadUri(String target) =>
     Uri.parse('https://github.com/hawkkiller/pixer/releases/download/$version/$target');
 
+final _httpClient = HttpClient();
+
 /// Downloads the asset for the given target OS and architecture.
 Future<File> downloadAsset({
   required OS targetOS,
@@ -15,18 +17,27 @@ Future<File> downloadAsset({
   required IOSSdk? iOSSdk,
   required Directory outputDirectory,
 }) async {
-  final targetName = targetOS.dylibFileName(createTargetName(targetOS, targetArchitecture, iOSSdk));
-  final uri = downloadUri(targetName);
-  final request = await HttpClient().getUrl(uri);
-  final response = await request.close();
-  if (response.statusCode != 200) {
-    throw ArgumentError('The request to $uri failed.');
-  }
+  try {
+    final targetName = targetOS.dylibFileName(
+      createTargetName(targetOS, targetArchitecture, iOSSdk),
+    );
 
-  final library = File.fromUri(outputDirectory.uri.resolve(targetName));
-  await library.create();
-  await response.pipe(library.openWrite());
-  return library;
+    final uri = downloadUri(targetName);
+    final request = await _httpClient.getUrl(uri);
+    final response = await request.close();
+
+    if (response.statusCode != 200) {
+      throw ArgumentError('The request to $uri failed.');
+    }
+
+    final library = File.fromUri(outputDirectory.uri.resolve(targetName));
+    await library.create();
+    await response.pipe(library.openWrite());
+
+    return library;
+  } finally {
+    _httpClient.close();
+  }
 }
 
 String createTargetName(OS targetOS, Architecture targetArchitecture, IOSSdk? iOSSdk) {
