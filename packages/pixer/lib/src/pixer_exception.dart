@@ -90,12 +90,3 @@ final class UnknownException extends PixerException {
   UnknownException([String? context])
     : super(_withContext('An unknown error occurred', context), ImageErrorCode.Unknown);
 }
-
-/// Exception thrown when loading an image fails
-final class LoadException extends PixerException {
-  LoadException([String? context])
-    : super(
-        context != null ? _withContext('Failed to load image', context) : 'Failed to load image',
-        ImageErrorCode.Unknown,
-      );
-}

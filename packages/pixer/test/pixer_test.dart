@@ -76,7 +76,10 @@ void main() {
   group('Pixer', () {
     test('loads image from file throws IoException for missing files', () {
       // For missing files, we now get specific IoException instead of generic LoadException
-      expect(() => Pixer.fromFile('nonexistent.jpg'), throwsA(isA<IoException>()));
+      expect(
+        () => Pixer.fromFile('nonexistent.jpg'),
+        throwsA(isA<IoException>()),
+      );
     });
 
     test('loads image from memory', () {
@@ -352,7 +355,10 @@ void main() {
       image.dispose();
       expect(image.isDisposed, isTrue);
 
-      expect(() => image.getMetadata(), throwsA(isA<InvalidPointerException>()));
+      expect(
+        () => image.getMetadata(),
+        throwsA(isA<InvalidPointerException>()),
+      );
     });
 
     test('filter type enum has all values', () {
@@ -374,8 +380,8 @@ void main() {
     });
 
     test('color type enum has all values', () {
-      expect(ColorType.l.value, equals(0));
-      expect(ColorType.la.value, equals(1));
+      expect(ColorType.luminance.value, equals(0));
+      expect(ColorType.luminanceAlpha.value, equals(1));
       expect(ColorType.rgb.value, equals(2));
       expect(ColorType.rgba.value, equals(3));
     });
@@ -818,7 +824,10 @@ void main() {
       // when format is detected but data is corrupted)
       final invalidData = Uint8List.fromList([0x00, 0x01, 0x02, 0x03]);
 
-      expect(() => Pixer.fromMemory(invalidData), throwsA(isA<PixerException>()));
+      expect(
+        () => Pixer.fromMemory(invalidData),
+        throwsA(isA<PixerException>()),
+      );
     });
   });
 }

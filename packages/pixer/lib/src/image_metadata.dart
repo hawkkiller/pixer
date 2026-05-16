@@ -1,47 +1,51 @@
 import 'dart:ffi' as ffi;
 import 'bindings/bindings.dart';
 
-/// Image color type
+/// Pixel layout of an image: which channels are present.
 enum ColorType {
-  /// Grayscale
-  l(0),
+  /// Single luminance channel (8 or 16 bit).
+  luminance(0),
 
-  /// Grayscale with alpha
-  la(1),
+  /// Luminance + alpha.
+  luminanceAlpha(1),
 
-  /// RGB
+  /// Red, green, blue.
   rgb(2),
 
-  /// RGBA
+  /// Red, green, blue, alpha.
   rgba(3);
 
   const ColorType(this.value);
 
   final int value;
 
+  /// Looks up the [ColorType] matching the native u8 code.
+  ///
+  /// Throws [ArgumentError] on unknown values — native and Dart enums are
+  /// expected to stay in sync.
   static ColorType fromValue(int value) => switch (value) {
-    0 => l,
-    1 => la,
+    0 => luminance,
+    1 => luminanceAlpha,
     2 => rgb,
     3 => rgba,
-    _ => rgba, // Default to RGBA
+    _ => throw ArgumentError('Unknown value for ColorType: $value'),
   };
 }
 
-/// Metadata about an image
-class PixerMetadata {
+/// Width, height, and color layout of an image.
+final class PixerMetadata {
   const PixerMetadata({required this.width, required this.height, required this.colorType});
 
-  /// Image width in pixels
+  /// Image width in pixels.
   final int width;
 
-  /// Image height in pixels
+  /// Image height in pixels.
   final int height;
 
-  /// Color type
+  /// Pixel layout (channels present).
   final ColorType colorType;
 
-  /// Creates metadata from native struct
+  /// Creates metadata from the native struct.
   factory PixerMetadata.fromNative(ffi.Pointer<ImageMetadata> ptr) {
     final metadata = ptr.ref;
     return PixerMetadata(
@@ -59,7 +63,6 @@ class PixerMetadata {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is PixerMetadata &&
-          runtimeType == other.runtimeType &&
           width == other.width &&
           height == other.height &&
           colorType == other.colorType;

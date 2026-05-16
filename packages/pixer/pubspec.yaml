@@ -1,6 +1,6 @@
 name: pixer
 description: A fast image processing package.
-version: 0.0.5
+version: 0.0.6
 resolution: workspace
 
 environment:

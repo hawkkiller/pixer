@@ -1,8 +1,16 @@
-## Unreleased
+## 0.0.6
 
-- refactor: replace native_toolchain_rs with native_toolchain_rust.
-- refactor: simplify Rust code, remove api.rs.
-- Simplified encoder API and native implementation to keep only JPEG quality as a configurable encoding option.
+- **Breaking:** Merged `Pixer.encodeWith(PixerEncoder)` into `Pixer.encode(PixerEncoder)`; the old `encode(ImageFormatEnum)` overload is gone. Use `image.encode(const PixerPngEncoder())` etc.
+- **Breaking:** Renamed `ColorType.l` / `ColorType.la` to `ColorType.luminance` / `ColorType.luminanceAlpha`. `ColorType.fromValue` now throws `ArgumentError` on unknown codes instead of defaulting to `rgba`.
+- **Breaking:** Removed unused `LoadException` (load failures already throw specific exceptions).
+- **Fixed:** `Pixer.contrast` docs: `0.0` is the neutral value (not `1.0`).
+- **Docs:** Clarified `Pixer.resize` semantics (fits within the bounds; use `resizeExact` for exact sizes).
+- **Docs:** Documented `Pixer.brightness` clamping and practical range.
+- **Docs:** Added doc comments to all generated `FilterTypeEnum`, `ImageFormatEnum`, and `ImageErrorCode` variants via the Rust source.
+- **Refactor:** Replaced `native_toolchain_rs` with `native_toolchain_rust`.
+- **Refactor:** Simplified Rust code, removed `api.rs`.
+- **Refactor:** Simplified encoder API and native implementation to keep only JPEG quality as a configurable encoding option.
+- **Refactor:** Marked `PixerMetadata` `final`.
 
 ## 0.0.5
 

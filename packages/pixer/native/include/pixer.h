@@ -6,52 +6,132 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+/**
+ * Sampling filter used when resizing.
+ *
+ * Quality and cost roughly increase from top to bottom; `Lanczos3` is the
+ * default and produces the sharpest results, `Nearest` is the fastest.
+ */
 enum FilterTypeEnum
 #ifdef __cplusplus
   : uint32_t
 #endif // __cplusplus
  {
+  /**
+   * Nearest-neighbour. Fastest, blocky output. Good for pixel art.
+   */
   Nearest = 0,
+  /**
+   * Linear (a.k.a. bilinear). Cheap, slightly blurry.
+   */
   Triangle = 1,
+  /**
+   * Catmull-Rom cubic. Sharper than `Triangle`, can ring on edges.
+   */
   CatmullRom = 2,
+  /**
+   * Gaussian. Soft output, useful for downscaling without aliasing.
+   */
   Gaussian = 3,
+  /**
+   * Lanczos with `a = 3`. Highest quality, slowest. Default.
+   */
   Lanczos3 = 4,
 };
 #ifndef __cplusplus
 typedef uint32_t FilterTypeEnum;
 #endif // __cplusplus
 
+/**
+ * Error code returned through `out_error` pointers and as the result of
+ * operations that don't return a handle.
+ */
 enum ImageErrorCode
 #ifdef __cplusplus
   : uint32_t
 #endif // __cplusplus
  {
+  /**
+   * The operation succeeded.
+   */
   Success = 0,
+  /**
+   * The provided path is empty, malformed, or refers to a non-existent file.
+   */
   InvalidPath = 1,
+  /**
+   * The image format is not recognised or not supported by this build.
+   */
   UnsupportedFormat = 2,
+  /**
+   * The image bytes are corrupt or do not match the expected format.
+   */
   DecodingError = 3,
+  /**
+   * Encoding the image to the requested format failed.
+   */
   EncodingError = 4,
+  /**
+   * An underlying I/O operation (read/write) failed.
+   */
   IoError = 5,
+  /**
+   * Width, height, or crop bounds are zero or exceed the image.
+   */
   InvalidDimensions = 6,
+  /**
+   * A handle or output pointer was null, or the image has been freed.
+   */
   InvalidPointer = 7,
+  /**
+   * A scalar parameter (e.g. JPEG quality, blur sigma) is out of range.
+   */
   InvalidParameter = 8,
+  /**
+   * An unclassified error occurred.
+   */
   Unknown = 99,
 };
 #ifndef __cplusplus
 typedef uint32_t ImageErrorCode;
 #endif // __cplusplus
 
+/**
+ * Image container format used for both decoding and encoding.
+ */
 enum ImageFormatEnum
 #ifdef __cplusplus
   : uint32_t
 #endif // __cplusplus
  {
+  /**
+   * Portable Network Graphics — lossless, alpha supported.
+   */
   Png = 0,
+  /**
+   * JPEG — lossy, no alpha. Quality is configurable on encode.
+   */
   Jpeg = 1,
+  /**
+   * Graphics Interchange Format — palette-based, supports animation
+   * (single-frame only via this API).
+   */
   Gif = 2,
+  /**
+   * WebP — lossy or lossless, alpha supported.
+   */
   WebP = 3,
+  /**
+   * Windows Bitmap — uncompressed, large files.
+   */
   Bmp = 4,
+  /**
+   * Windows Icon — multi-resolution container.
+   */
   Ico = 5,
+  /**
+   * Tagged Image File Format — typically lossless.
+   */
   Tiff = 6,
 };
 #ifndef __cplusplus
@@ -141,7 +221,10 @@ ImageErrorCode pixer_write_to(const struct ImageHandle *handle,
 
 /**
  * Write an image to a JPEG buffer with the specified quality.
- * Caller must free the buffer using pixer_free_buffer.
+ *
+ * `quality` must be in `1..=100`; `format` must be `Jpeg`. Use
+ * `pixer_write_to` for other formats. Caller must free the buffer using
+ * `pixer_free_buffer`.
  */
 ImageErrorCode pixer_write_to_with_quality(const struct ImageHandle *handle,
                                            ImageFormatEnum format,
@@ -156,7 +239,12 @@ ImageErrorCode pixer_get_metadata(const struct ImageHandle *handle,
                                   struct ImageMetadata *out_metadata);
 
 /**
- * Resize an image
+ * Resize the image to fit *within* `width` x `height` while preserving
+ * aspect ratio.
+ *
+ * The result is at most `width` x `height`; the smaller dimension is scaled
+ * proportionally so the image is never distorted. Use `pixer_resize_exact`
+ * to force exact dimensions.
  */
 struct ImageHandle *pixer_resize(const struct ImageHandle *handle,
                                  uint32_t width,
@@ -164,7 +252,9 @@ struct ImageHandle *pixer_resize(const struct ImageHandle *handle,
                                  FilterTypeEnum filter);
 
 /**
- * Resize an image to exact dimensions
+ * Resize the image to exactly `width` x `height`, ignoring aspect ratio.
+ *
+ * May visibly stretch or squash the image.
  */
 struct ImageHandle *pixer_resize_exact(const struct ImageHandle *handle,
                                        uint32_t width,
@@ -206,17 +296,26 @@ struct ImageHandle *pixer_fliph(const struct ImageHandle *handle);
 struct ImageHandle *pixer_flipv(const struct ImageHandle *handle);
 
 /**
- * Blur an image
+ * Apply a Gaussian blur with the given standard deviation in pixels.
+ *
+ * `sigma` must be finite and `>= 0`. `sigma == 0` returns an unchanged copy.
  */
 struct ImageHandle *pixer_blur(const struct ImageHandle *handle, float sigma);
 
 /**
- * Brighten the pixels of an image
+ * Add `value` to every channel of every pixel.
+ *
+ * Values are clamped per-channel to `[0, 255]`. Negative values darken,
+ * positive values brighten. The practical range is roughly `-255..=255`;
+ * larger magnitudes simply saturate.
  */
 struct ImageHandle *pixer_brighten(const struct ImageHandle *handle, int32_t value);
 
 /**
- * Adjust contrast
+ * Adjust contrast around the midpoint.
+ *
+ * `c == 0.0` leaves the image unchanged. Positive values increase contrast,
+ * negative values decrease it. `c` must be finite.
  */
 struct ImageHandle *pixer_adjust_contrast(const struct ImageHandle *handle, float c);
 

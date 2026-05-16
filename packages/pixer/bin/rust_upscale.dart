@@ -19,4 +19,12 @@ void main() async {
   final upscaledImage = image.resize(3840, 2160);
   upscaledImage.saveToFile('upscaled_image.jpg');
   print('Image upscaled in ${stopwatch.elapsedMilliseconds}ms');
+
+  final img = Pixer.fromFile('assets/example_img.jpg');
+  final resizedImage = img.resize(3840, 2160);
+  final croppedImage = resizedImage.crop(0, 0, 100, 100);
+  croppedImage.saveToFile('cropped_image.jpg');
+  img.dispose();
+  resizedImage.dispose();
+  croppedImage.dispose();
 }

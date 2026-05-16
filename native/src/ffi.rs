@@ -8,30 +8,51 @@ use std::{
     slice,
 };
 
+/// Error code returned through `out_error` pointers and as the result of
+/// operations that don't return a handle.
 #[allow(dead_code)]
 #[repr(u32)]
 pub enum ImageErrorCode {
+    /// The operation succeeded.
     Success = 0,
+    /// The provided path is empty, malformed, or refers to a non-existent file.
     InvalidPath = 1,
+    /// The image format is not recognised or not supported by this build.
     UnsupportedFormat = 2,
+    /// The image bytes are corrupt or do not match the expected format.
     DecodingError = 3,
+    /// Encoding the image to the requested format failed.
     EncodingError = 4,
+    /// An underlying I/O operation (read/write) failed.
     IoError = 5,
+    /// Width, height, or crop bounds are zero or exceed the image.
     InvalidDimensions = 6,
+    /// A handle or output pointer was null, or the image has been freed.
     InvalidPointer = 7,
+    /// A scalar parameter (e.g. JPEG quality, blur sigma) is out of range.
     InvalidParameter = 8,
+    /// An unclassified error occurred.
     Unknown = 99,
 }
 
+/// Image container format used for both decoding and encoding.
 #[allow(dead_code)]
 #[repr(u32)]
 pub enum ImageFormatEnum {
+    /// Portable Network Graphics — lossless, alpha supported.
     Png = 0,
+    /// JPEG — lossy, no alpha. Quality is configurable on encode.
     Jpeg = 1,
+    /// Graphics Interchange Format — palette-based, supports animation
+    /// (single-frame only via this API).
     Gif = 2,
+    /// WebP — lossy or lossless, alpha supported.
     WebP = 3,
+    /// Windows Bitmap — uncompressed, large files.
     Bmp = 4,
+    /// Windows Icon — multi-resolution container.
     Ico = 5,
+    /// Tagged Image File Format — typically lossless.
     Tiff = 6,
 }
 
@@ -49,13 +70,22 @@ impl ImageFormatEnum {
     }
 }
 
+/// Sampling filter used when resizing.
+///
+/// Quality and cost roughly increase from top to bottom; `Lanczos3` is the
+/// default and produces the sharpest results, `Nearest` is the fastest.
 #[allow(dead_code)]
 #[repr(u32)]
 pub enum FilterTypeEnum {
+    /// Nearest-neighbour. Fastest, blocky output. Good for pixel art.
     Nearest = 0,
+    /// Linear (a.k.a. bilinear). Cheap, slightly blurry.
     Triangle = 1,
+    /// Catmull-Rom cubic. Sharper than `Triangle`, can ring on edges.
     CatmullRom = 2,
+    /// Gaussian. Soft output, useful for downscaling without aliasing.
     Gaussian = 3,
+    /// Lanczos with `a = 3`. Highest quality, slowest. Default.
     Lanczos3 = 4,
 }
 
@@ -372,7 +402,10 @@ pub extern "C" fn pixer_write_to(
 }
 
 /// Write an image to a JPEG buffer with the specified quality.
-/// Caller must free the buffer using pixer_free_buffer.
+///
+/// `quality` must be in `1..=100`; `format` must be `Jpeg`. Use
+/// `pixer_write_to` for other formats. Caller must free the buffer using
+/// `pixer_free_buffer`.
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_write_to_with_quality(
     handle: *const ImageHandle,
@@ -429,7 +462,12 @@ pub extern "C" fn pixer_get_metadata(
 // Image Transformations
 // ============================================================================
 
-/// Resize an image
+/// Resize the image to fit *within* `width` x `height` while preserving
+/// aspect ratio.
+///
+/// The result is at most `width` x `height`; the smaller dimension is scaled
+/// proportionally so the image is never distorted. Use `pixer_resize_exact`
+/// to force exact dimensions.
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_resize(
     handle: *const ImageHandle,
@@ -447,7 +485,9 @@ pub extern "C" fn pixer_resize(
     .unwrap_or(std::ptr::null_mut())
 }
 
-/// Resize an image to exact dimensions
+/// Resize the image to exactly `width` x `height`, ignoring aspect ratio.
+///
+/// May visibly stretch or squash the image.
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_resize_exact(
     handle: *const ImageHandle,
@@ -529,7 +569,9 @@ pub extern "C" fn pixer_flipv(handle: *const ImageHandle) -> *mut ImageHandle {
 // Image Filters & Adjustments
 // ============================================================================
 
-/// Blur an image
+/// Apply a Gaussian blur with the given standard deviation in pixels.
+///
+/// `sigma` must be finite and `>= 0`. `sigma == 0` returns an unchanged copy.
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_blur(handle: *const ImageHandle, sigma: f32) -> *mut ImageHandle {
     if !sigma.is_finite() || sigma < 0.0 {
@@ -539,13 +581,20 @@ pub extern "C" fn pixer_blur(handle: *const ImageHandle, sigma: f32) -> *mut Ima
     with_image(handle, |img| into_handle(img.blur(sigma))).unwrap_or(std::ptr::null_mut())
 }
 
-/// Brighten the pixels of an image
+/// Add `value` to every channel of every pixel.
+///
+/// Values are clamped per-channel to `[0, 255]`. Negative values darken,
+/// positive values brighten. The practical range is roughly `-255..=255`;
+/// larger magnitudes simply saturate.
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_brighten(handle: *const ImageHandle, value: i32) -> *mut ImageHandle {
     with_image(handle, |img| into_handle(img.brighten(value))).unwrap_or(std::ptr::null_mut())
 }
 
-/// Adjust contrast
+/// Adjust contrast around the midpoint.
+///
+/// `c == 0.0` leaves the image unchanged. Positive values increase contrast,
+/// negative values decrease it. `c` must be finite.
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_adjust_contrast(handle: *const ImageHandle, c: f32) -> *mut ImageHandle {
     if !c.is_finite() {

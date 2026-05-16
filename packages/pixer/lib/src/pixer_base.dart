@@ -8,15 +8,18 @@ import 'image_metadata.dart';
 import 'pixer_encoder.dart';
 import 'pixer_exception.dart';
 
-/// A fast image processing library
+/// A loaded image, backed by native Rust.
 ///
-/// This class provides methods for loading, saving, and manipulating images.
-/// Images are backed by native Rust code for high performance.
+/// Operations like [resize], [crop], [blur], and so on each return a new
+/// [Pixer]; the original is unchanged. Encode with [encode] or save with
+/// [saveToFile].
 ///
-/// **Important:** Always call [dispose] when done with an image to free native
-/// memory. While a finalizer provides a safety net, it is not guaranteed to run
-/// (especially in isolates). For reliable memory management, always dispose
-/// explicitly.
+/// ## Memory management
+///
+/// Every [Pixer] owns a native handle. Call [dispose] when you're done with
+/// it — including intermediates in a pipeline. A finalizer provides a safety
+/// net but is not guaranteed to run (especially across isolates), so explicit
+/// disposal is the only reliable strategy.
 ///
 /// Example:
 /// ```dart
@@ -235,55 +238,21 @@ final class Pixer {
     }
   }
 
-  /// Encodes the image to a byte buffer using the provided encoder.
+  /// Encodes the image to a byte buffer with [encoder].
+  ///
+  /// Pass `const PixerPngEncoder()` (or any other [PixerEncoder]) for default
+  /// settings, or e.g. `PixerJpegEncoder(quality: 90)` to tune output.
   Uint8List encode(PixerEncoder encoder) {
     _checkDisposed();
-    final format = encoder.format;
-    final quality = encoder is PixerJpegEncoder ? encoder.quality : null;
-
-    final outDataPtr = malloc.allocate<ffi.Pointer<ffi.Uint8>>(
-      ffi.sizeOf<ffi.Pointer<ffi.Uint8>>(),
-    );
-    final outLenPtr = malloc.allocate<ffi.UintPtr>(ffi.sizeOf<ffi.UintPtr>());
-
-    try {
-      final errorCode = quality == null
-          ? pixer_write_to(_handle, format.value, outDataPtr, outLenPtr)
-          : pixer_write_to_with_quality(
-              _handle,
-              format.value,
-              quality,
-              outDataPtr,
-              outLenPtr,
-            );
-      final error = _errorFromValue(errorCode);
-      if (error != ImageErrorCode.Success) {
-        final qualityContext = quality == null ? '' : ', quality: $quality';
-        throw PixerException.fromCode(
-          error,
-          context: 'format: ${format.name}$qualityContext',
-        );
-      }
-
-      final dataPtr = outDataPtr.value;
-      final len = outLenPtr.value;
-      if (dataPtr == ffi.nullptr || len == 0) {
-        throw UnknownException('operation: encode');
-      }
-
-      final result = Uint8List.fromList(dataPtr.asTypedList(len));
-
-      // Free the buffer allocated by Rust
-      pixer_free_buffer(dataPtr, len);
-
-      return result;
-    } finally {
-      malloc.free(outDataPtr);
-      malloc.free(outLenPtr);
-    }
+    return encoder.encode(_handle);
   }
 
-  /// Resizes the image to the specified dimensions, maintaining aspect ratio
+  /// Resizes the image to fit *within* [width] x [height], preserving aspect
+  /// ratio.
+  ///
+  /// The result is at most [width] x [height]; the smaller dimension is
+  /// scaled proportionally so the image is never distorted. Use
+  /// [resizeExact] to force exact dimensions.
   ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer resize(
@@ -297,7 +266,10 @@ final class Pixer {
     return _fromNativeHandle(handle, 'resize');
   }
 
-  /// Resizes the image to exact dimensions (may distort aspect ratio)
+  /// Resizes the image to exactly [width] x [height], ignoring aspect ratio.
+  ///
+  /// May visibly stretch or squash the image. See [resize] to preserve
+  /// aspect ratio.
   ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer resizeExact(
@@ -381,9 +353,12 @@ final class Pixer {
     return _fromNativeHandle(handle, 'blur');
   }
 
-  /// Adjusts the brightness of the image
+  /// Adjusts brightness by adding [value] to every channel.
   ///
-  /// [value] is added to each pixel's brightness (can be negative)
+  /// Values are clamped per-channel to `[0, 255]`. Negative values darken,
+  /// positive values brighten. The practical range is roughly `-255..=255`;
+  /// larger magnitudes simply saturate.
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer brightness(int value) {
     _checkDisposed();
@@ -391,9 +366,11 @@ final class Pixer {
     return _fromNativeHandle(handle, 'brightness');
   }
 
-  /// Adjusts the contrast of the image
+  /// Adjusts contrast around the midpoint.
   ///
-  /// [contrast] is the contrast factor (1.0 = no change, >1.0 = more contrast)
+  /// [contrast] of `0.0` leaves the image unchanged. Positive values increase
+  /// contrast, negative values decrease it. Must be finite.
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer contrast(double contrast) {
     _checkDisposed();

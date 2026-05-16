@@ -6,7 +6,7 @@ Fast, cross-platform image manipulation for Dart, powered by Rust via FFI.
 
 ```yaml
 dependencies:
-  pixer: ^0.0.5
+  pixer: ^0.0.6
 ```
 
 Native binaries are downloaded automatically via Dart build hooks.
@@ -46,10 +46,10 @@ PNG, JPEG, GIF, WebP, BMP, ICO, TIFF
 All operations return a **new** `Pixer` instance; the original is unchanged.
 
 ```dart
-// Resize (maintains aspect ratio)
+// Resize to fit within 800x600, preserving aspect ratio
 final resized = image.resize(800, 600);
 
-// Resize exact (may distort)
+// Resize to exactly 800x600 (may distort)
 final stretched = image.resizeExact(800, 600);
 
 // Crop (x, y, width, height)
@@ -65,9 +65,9 @@ final hFlip = image.flipHorizontal();
 final vFlip = image.flipVertical();
 
 // Adjustments
-final blurred = image.blur(2.5);           // Gaussian blur (sigma)
-final bright = image.brightness(30);       // Add to brightness (-255 to 255)
-final contrast = image.contrast(1.2);      // Contrast factor (1.0 = unchanged)
+final blurred = image.blur(2.5);       // Gaussian blur, sigma in pixels
+final bright = image.brightness(30);   // Add to each channel; clamps to [0, 255]
+final punchier = image.contrast(20);   // 0 = unchanged, positive boosts, negative flattens
 final gray = image.grayscale();
 final inverted = image.invert();
 ```
@@ -91,7 +91,10 @@ image.saveToFile('output.webp');
 // Encode to bytes
 final pngBytes = image.encode(const PixerPngEncoder());
 final jpegBytes = image.encode(PixerJpegEncoder(quality: 90));
+final webpBytes = image.encode(const PixerWebPEncoder());
 ```
+
+`encode` accepts any [`PixerEncoder`](lib/src/pixer_encoder.dart): `PixerPngEncoder`, `PixerJpegEncoder`, `PixerGifEncoder`, `PixerWebPEncoder`, `PixerBmpEncoder`, `PixerIcoEncoder`, `PixerTiffEncoder`. Only `PixerJpegEncoder` currently has tunable options (`quality`, 1–100).
 
 ## Metadata
 
@@ -105,12 +108,17 @@ print('${image.width}x${image.height}');
 
 ## Resource Management
 
-Call `dispose()` when done to free native memory. A finalizer provides a safety net, but explicit disposal is recommended.
+Every `Pixer` owns a native handle. Call `dispose()` when done — including intermediates in a pipeline. A finalizer is a safety net, not a strategy: it may not run, especially across isolates.
 
 ```dart
 final image = Pixer.fromFile('input.jpg');
 try {
-  // use image...
+  final resized = image.resize(800, 600);
+  try {
+    resized.saveToFile('out.jpg');
+  } finally {
+    resized.dispose();
+  }
 } finally {
   image.dispose();
 }
@@ -129,6 +137,8 @@ All errors throw typed `PixerException` subclasses:
 | `UnsupportedFormatException` | Format not supported |
 | `InvalidDimensionsException` | Invalid width/height/crop bounds |
 | `InvalidPointerException` | Image already disposed |
+| `InvalidParameterException` | Scalar out of range (e.g. JPEG quality) |
+| `UnknownException` | Unclassified native error |
 
 ## Platforms
 
