@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pixer — Benchmark Report</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0a0a0c;
+        --bg-elev: #111114;
+        --bg-card: #131318;
+        --line: rgba(255, 255, 255, 0.06);
+        --line-strong: rgba(255, 255, 255, 0.12);
+        --text: #f5f5f7;
+        --text-dim: #a1a1aa;
+        --text-faint: #6b6b73;
+        --accent: #d4b896;
+        --accent-soft: rgba(212, 184, 150, 0.12);
+        --pixer: #e8c89a;
+        --pixer-glow: rgba(232, 200, 154, 0.35);
+        --rival: #3a3a42;
+        --rival-bar: #2a2a32;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+        font-weight: 400;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        letter-spacing: -0.01em;
+      }
+
+      body {
+        background:
+          radial-gradient(
+            ellipse 80% 40% at 50% -10%,
+            rgba(212, 184, 150, 0.06),
+            transparent 60%
+          ),
+          var(--bg);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+
+      .container {
+        width: 100%;
+        max-width: 1280px;
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        gap: 40px;
+        align-items: start;
+      }
+
+      /* ───── Sidebar (Hero + Stats) ───── */
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        position: sticky;
+        top: 24px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .brand-mark {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, var(--pixer) 0%, #c9a878 100%);
+        position: relative;
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.08),
+          0 8px 24px -8px var(--pixer-glow);
+        flex-shrink: 0;
+      }
+
+      .brand-mark::after {
+        content: "";
+        position: absolute;
+        inset: 7px;
+        border-radius: 3px;
+        background: var(--bg);
+        opacity: 0.85;
+      }
+
+      .brand-text {
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+      }
+
+      .brand-text strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      .eyebrow {
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      h1 {
+        font-size: 38px;
+        font-weight: 600;
+        line-height: 1.05;
+        letter-spacing: -0.03em;
+      }
+
+      h1 .highlight {
+        background: linear-gradient(135deg, var(--pixer) 0%, #f2d9b3 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .lede {
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--text-dim);
+      }
+
+      .lede code {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.04);
+        padding: 1px 6px;
+        border-radius: 4px;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1px;
+        background: var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+      }
+
+      .stat {
+        background: var(--bg-elev);
+        padding: 16px 18px;
+      }
+
+      .stat.wide {
+        grid-column: 1 / -1;
+      }
+
+      .stat-label {
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+        margin-bottom: 8px;
+      }
+
+      .stat-value {
+        font-size: 28px;
+        font-weight: 600;
+        letter-spacing: -0.03em;
+        font-feature-settings: "tnum";
+        line-height: 1;
+      }
+
+      .stat-value .unit {
+        font-size: 15px;
+        color: var(--text-dim);
+        font-weight: 500;
+        margin-left: 2px;
+      }
+
+      .stat-sub {
+        font-size: 11px;
+        color: var(--text-faint);
+        margin-top: 6px;
+      }
+
+      .legend {
+        display: flex;
+        gap: 16px;
+        font-size: 11px;
+        color: var(--text-dim);
+        padding-top: 8px;
+        border-top: 1px solid var(--line);
+      }
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+
+      .dot.pixer {
+        background: var(--pixer);
+        box-shadow: 0 0 8px var(--pixer-glow);
+      }
+
+      .dot.rival {
+        background: var(--rival);
+      }
+
+      .meta {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10px;
+        color: var(--text-faint);
+        letter-spacing: 0.02em;
+      }
+
+      /* ───── Benchmark Grid ───── */
+      .benches {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .bench {
+        background: var(--bg-card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px 18px;
+        transition:
+          border-color 0.3s ease,
+          transform 0.3s ease;
+      }
+
+      .bench:hover {
+        border-color: var(--line-strong);
+        transform: translateY(-1px);
+      }
+
+      .bench-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+
+      .bench-name {
+        font-size: 12px;
+        font-weight: 500;
+        font-family: "JetBrains Mono", monospace;
+        letter-spacing: -0.01em;
+        color: var(--text);
+      }
+
+      .speedup {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--pixer);
+        background: var(--accent-soft);
+        padding: 3px 8px;
+        border-radius: 5px;
+        letter-spacing: -0.02em;
+        white-space: nowrap;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 44px 1fr 76px;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 7px;
+      }
+
+      .row:last-child {
+        margin-bottom: 0;
+      }
+
+      .row-label {
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+      }
+
+      .bar-track {
+        height: 6px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 999px;
+        overflow: hidden;
+      }
+
+      .bar {
+        height: 100%;
+        border-radius: 999px;
+        transform-origin: left;
+        animation: grow 1.1s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+
+      .bar.pixer {
+        background: linear-gradient(90deg, var(--pixer) 0%, #f2d9b3 100%);
+        box-shadow: 0 0 10px var(--pixer-glow);
+      }
+
+      .bar.rival {
+        background: var(--rival-bar);
+      }
+
+      @keyframes grow {
+        from {
+          transform: scaleX(0);
+        }
+        to {
+          transform: scaleX(1);
+        }
+      }
+
+      .timing {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        font-weight: 500;
+        text-align: right;
+        font-feature-settings: "tnum";
+        color: var(--text);
+      }
+
+      .timing.dim {
+        color: var(--text-faint);
+        font-weight: 400;
+      }
+
+      /* Wide card for the 7th item (odd one out) */
+      .bench.wide {
+        grid-column: 1 / -1;
+      }
+
+      @media (max-width: 1024px) {
+        .container {
+          grid-template-columns: 1fr;
+          gap: 24px;
+        }
+        .sidebar {
+          position: static;
+        }
+        h1 {
+          font-size: 32px;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .benches {
+          grid-template-columns: 1fr;
+        }
+        .bench.wide {
+          grid-column: auto;
+        }
+        body {
+          padding: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark"></div>
+          <div class="brand-text"><strong>Pixer</strong> · Benchmark</div>
+        </div>
+
+        <div>
+          <div class="eyebrow" style="margin-bottom: 12px">Performance</div>
+          <h1>Native&#8209;speed<br />image ops, <span class="highlight">measured.</span></h1>
+        </div>
+
+        <p class="lede">
+          Pixer vs the <code>image</code> package across seven operations.
+          Lower is better.
+        </p>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-label">Avg speedup</div>
+            <div class="stat-value">24.5<span class="unit">×</span></div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Peak</div>
+            <div class="stat-value">62.9<span class="unit">×</span></div>
+            <div class="stat-sub">resize 4K</div>
+          </div>
+          <div class="stat wide">
+            <div class="stat-label">Coverage</div>
+            <div class="stat-value" style="font-size: 18px; font-weight: 500;">
+              resize · load · encode · transform
+            </div>
+          </div>
+        </div>
+
+        <div class="legend">
+          <div class="legend-item"><span class="dot pixer"></span>Pixer</div>
+          <div class="legend-item"><span class="dot rival"></span>image</div>
+          <div class="meta" style="margin-left: auto">2026·05·17</div>
+        </div>
+      </aside>
+
+      <!-- Bench Grid -->
+      <main class="benches" id="benches"></main>
+    </div>
+
+    <script>
+      const data = [
+        { name: "resize_800x600",   pixer: 149562.0,     rival: 3211790.5 },
+        { name: "resize_3840x2160", pixer: 903944.0,     rival: 56847694.5 },
+        { name: "load",             pixer: 59612.76,     rival: 633168.5 },
+        { name: "encode_jpeg",      pixer: 201714.36,    rival: 1211010.0 },
+        { name: "rotate_90",        pixer: 16463.35,     rival: 305782.86 },
+        { name: "flip_horizontal",  pixer: 13892.50,     rival: 377647.0 },
+      ];
+
+      const fmt = (us) => {
+        if (us >= 1_000_000) return (us / 1_000_000).toFixed(2) + " s";
+        if (us >= 1_000)     return (us / 1_000).toFixed(2) + " ms";
+        return us.toFixed(1) + " μs";
+      };
+
+      const root = document.getElementById("benches");
+      data.forEach((d, i) => {
+        const max = Math.max(d.pixer, d.rival);
+        const speedup = (d.rival / d.pixer).toFixed(1);
+        const pixerPct = Math.max((d.pixer / max) * 100, 1.5);
+        const rivalPct = (d.rival / max) * 100;
+
+        const card = document.createElement("div");
+        card.className = "bench";
+        card.innerHTML = `
+          <div class="bench-head">
+            <div class="bench-name">${d.name}</div>
+            <div class="speedup">${speedup}× faster</div>
+          </div>
+          <div class="row">
+            <div class="row-label">Pixer</div>
+            <div class="bar-track"><div class="bar pixer" style="width:${pixerPct}%; animation-delay:${i * 50 + 80}ms"></div></div>
+            <div class="timing">${fmt(d.pixer)}</div>
+          </div>
+          <div class="row">
+            <div class="row-label">image</div>
+            <div class="bar-track"><div class="bar rival" style="width:${rivalPct}%; animation-delay:${i * 50 + 140}ms"></div></div>
+            <div class="timing dim">${fmt(d.rival)}</div>
+          </div>
+        `;
+        root.appendChild(card);
+      });
+    </script>
+  </body>
+</html>
