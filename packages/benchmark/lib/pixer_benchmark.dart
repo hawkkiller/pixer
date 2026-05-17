@@ -24,7 +24,7 @@ class PixerResizeBenchmark extends BenchmarkBase {
 
   @override
   void run() {
-    final resized = image.resize(targetWidth, targetHeight);
+    final resized = image.resize(targetWidth, targetHeight, filter: FilterTypeEnum.Lanczos3);
     resized.dispose();
   }
 }
