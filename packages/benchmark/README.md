@@ -10,24 +10,24 @@ dart run bin/main.dart
 
 ## Benchmark Results
 
-_Last updated: October 25, 2025_
+_Last updated: May 17, 2026_
 
 | Operation            | pixer (μs) | image (μs) | Speedup   |
 | -------------------- | ---------- | ---------- | --------- |
-| **Resize 800x600**   | 146,030    | 3,180,235  | **21.8x** |
-| **Resize 1920x1080** | 2,302      | 4,791      | **2.1x**  |
-| **Resize 3840x2160** | 913,056    | 56,474,861 | **61.9x** |
-| **Load**             | 60,738     | 670,670    | **11.0x** |
-| **Encode JPEG**      | 137,764    | 1,140,747  | **8.3x**  |
-| **Rotate 90°**       | 16,207     | 312,003    | **19.3x** |
-| **Flip Horizontal**  | 15,747     | 374,257    | **23.8x** |
+| **Resize 800x600**   | 149,562    | 3,211,790  | **21.5x** |
+| **Resize 1920x1080** | 864        | 4,941      | **5.7x**  |
+| **Resize 3840x2160** | 903,944    | 56,847,694 | **62.9x** |
+| **Load**             | 59,613     | 633,168    | **10.6x** |
+| **Encode JPEG**      | 201,714    | 1,211,010  | **6.0x**  |
+| **Rotate 90°**       | 16,463     | 305,783    | **18.6x** |
+| **Flip Horizontal**  | 13,892     | 377,647    | **27.2x** |
 
 Note: Image given as input for all operations is a Full HD (1920x1080) JPEG image.
 
 ### Key Findings
 
-- **Massive 4K Performance**: `pixer` is **61.9x faster** at resizing 4K images
-- **Consistent Advantages**: Speedups range from 2.1x to 61.9x across all operations
+- **Massive 4K Performance**: `pixer` is **62.9x faster** at resizing 4K images
+- **Consistent Advantages**: Speedups range from 5.7x to 62.9x across all operations
 - **Memory Efficient**: Rust-backed implementation with proper resource management
 - **Production Ready**: Significant performance gains for real-world image processing tasks
 
@@ -39,4 +39,4 @@ Note: Image given as input for all operations is a Full HD (1920x1080) JPEG imag
 - Encoding operations
 - Batch transformations
 
-The Rust-backed implementation typically shows 5-50x performance improvements depending on the operation.
+The Rust-backed implementation typically shows 5-60x performance improvements depending on the operation.

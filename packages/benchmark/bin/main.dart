@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:benchmarks/dart_image_benchmark.dart';
-import 'package:benchmarks/pixer_benchmark.dart';
+import '../lib/dart_image_benchmark.dart';
+import '../lib/pixer_benchmark.dart';
 
 void main() {
   print('\n=== Image Processing Benchmarks ===\n');
