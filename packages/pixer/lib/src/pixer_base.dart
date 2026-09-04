@@ -8,6 +8,8 @@ import 'image_metadata.dart';
 import 'pixer_encoder.dart';
 import 'pixer_exception.dart';
 
+part 'pixer_batch.dart';
+
 /// A loaded image, backed by native Rust.
 ///
 /// Operations like [resize], [crop], [blur], and so on each return a new
@@ -256,6 +258,15 @@ final class Pixer implements ffi.Finalizable {
   Uint8List encode(PixerEncoder encoder) {
     _checkDisposed();
     return encoder.encode(_handle);
+  }
+
+  /// Starts a lazy batch of image operations.
+  ///
+  /// Operations are recorded in Dart and executed together when [PixerBatch.toImage],
+  /// [PixerBatch.encode], or [PixerBatch.saveToFile] is called.
+  PixerBatch batch() {
+    _checkDisposed();
+    return PixerBatch._(this);
   }
 
   /// Resizes the image to fit *within* [width] x [height], preserving aspect

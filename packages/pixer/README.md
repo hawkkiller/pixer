@@ -43,7 +43,7 @@ PNG, JPEG, GIF, WebP, BMP, ICO, TIFF
 
 ## Image Operations
 
-All operations return a **new** `Pixer` instance; the original is unchanged.
+All direct operations return a **new** `Pixer` instance; the original is unchanged.
 
 ```dart
 // Resize to fit within 800x600, preserving aspect ratio
@@ -82,6 +82,28 @@ image.resize(800, 600, filter: FilterTypeEnum.CatmullRom);
 image.resize(800, 600, filter: FilterTypeEnum.Gaussian);
 ```
 
+## Batch Processing
+
+Use `batch()` to execute multiple operations in one native call without creating
+Dart-visible intermediate images. Operations are lazy until a terminal method
+is called.
+
+```dart
+final bytes = image
+    .batch()
+    .resize(800, 600)
+    .grayscale()
+    .encode(PixerJpegEncoder(quality: 85));
+
+final result = image.batch().crop(10, 10, 200, 200).rotate90().toImage();
+result.dispose();
+
+image.batch().resize(320, 240).saveToFile('thumbnail.png');
+```
+
+The original `Pixer` is unchanged. Crop bounds and other sequence-dependent
+validation are evaluated against the output of preceding operations.
+
 ## Saving & Encoding
 
 ```dart
@@ -111,6 +133,9 @@ print('${image.width}x${image.height}');
 Every `Pixer` owns a native handle. Call `dispose()` when done — including intermediates in a pipeline.
 Each pixer is assigned a finalizer, which frees the native handle when the pixer is garbage collected.
 However, the finalizer is not guaranteed to run, especially across isolates. It is **strongly recommended** to call `dispose()` explicitly.
+
+Batch operations keep their intermediates inside Rust. Only a `toImage()` result
+owns a new native handle that must be disposed.
 
 ```dart
 final image = Pixer.fromFile('input.jpg');
@@ -155,6 +180,7 @@ Linux, macOS, Windows, Android, iOS
 - [x] Adjustments: blur, brightness, contrast, grayscale, invert
 - [x] Metadata access (width, height, color type)
 - [x] Encoder objects with JPEG quality support
+- [x] Lazy batch processing with image, byte, and file outputs
 - [x] Full platform support (Linux, macOS, Windows, Android, iOS)
 
 ### Planned — `image` crate
@@ -165,7 +191,6 @@ Linux, macOS, Windows, Android, iOS
 - [ ] Composite images (overlay one image onto another at x, y)
 - [ ] Tiling
 - [ ] Animated GIF/WebP frame-level control
-- [ ] Batch processing API
 
 ### Planned — requires `imageproc`
 - [ ] Arbitrary angle rotation

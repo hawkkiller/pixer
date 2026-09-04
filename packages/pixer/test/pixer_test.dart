@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'dart:typed_data';
+
 import 'package:pixer/pixer.dart';
 import 'package:test/test.dart';
 
@@ -819,6 +821,130 @@ void main() {
       final invalidData = Uint8List.fromList([0x00, 0x01, 0x02, 0x03]);
 
       expect(() => Pixer.fromMemory(invalidData), throwsA(isA<PixerException>()));
+    });
+
+    test('direct transformations use the shared operation core', () {
+      final image = Pixer.fromMemory(_transparentPng());
+      final results = [
+        image.resize(2, 3),
+        image.resizeExact(2, 3),
+        image.rotate90(),
+        image.rotate180(),
+        image.rotate270(),
+        image.flipHorizontal(),
+        image.flipVertical(),
+        image.blur(0),
+        image.brightness(0),
+        image.contrast(0),
+        image.grayscale(),
+        image.invert(),
+      ];
+
+      for (final result in results) {
+        expect(result.isDisposed, isFalse);
+        result.dispose();
+      }
+      image.dispose();
+    });
+
+    group('batch', () {
+      test('applies operations in order and leaves the source unchanged', () {
+        final image = Pixer.fromMemory(_transparentPng());
+        final result = image
+            .batch()
+            .resizeExact(4, 3)
+            .crop(1, 1, 2, 2)
+            .rotate90()
+            .toImage();
+
+        expect((result.width, result.height), (2, 2));
+        expect((image.width, image.height), (1, 1));
+
+        result.dispose();
+        image.dispose();
+      });
+
+      test('encodes the final image', () {
+        final image = Pixer.fromMemory(_transparentPng());
+        final bytes = image
+            .batch()
+            .resizeExact(2, 3)
+            .grayscale()
+            .encode(PixerJpegEncoder(quality: 85));
+
+        expect(bytes.take(2), equals([0xFF, 0xD8]));
+        final decoded = Pixer.fromMemory(bytes);
+        expect((decoded.width, decoded.height), (2, 3));
+
+        decoded.dispose();
+        image.dispose();
+      });
+
+      test('supports every transformation command', () {
+        final image = Pixer.fromMemory(_transparentPng());
+        final result = image
+            .batch()
+            .resizeExact(4, 3)
+            .resize(3, 3)
+            .rotate180()
+            .rotate270()
+            .flipHorizontal()
+            .flipVertical()
+            .blur(0)
+            .brightness(0)
+            .contrast(0)
+            .grayscale()
+            .invert()
+            .toImage();
+
+        expect((result.width, result.height), (2, 3));
+
+        result.dispose();
+        image.dispose();
+      });
+
+      test('reports the failing operation', () {
+        final image = Pixer.fromMemory(_transparentPng());
+
+        expect(
+          () => image.batch().resizeExact(2, 2).crop(1, 1, 2, 2).toImage(),
+          throwsA(
+            isA<InvalidDimensionsException>().having(
+              (error) => error.message,
+              'message',
+              contains('batch operation 2: crop'),
+            ),
+          ),
+        );
+
+        image.dispose();
+      });
+
+      test('rejects execution after the source is disposed', () {
+        final image = Pixer.fromMemory(_transparentPng());
+        final batch = image.batch().grayscale();
+        image.dispose();
+
+        expect(batch.toImage, throwsA(isA<InvalidPointerException>()));
+      });
+
+      test('saves the final image to a file', () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'pixer_batch_test_',
+        );
+        final output = File('${directory.path}/output.png');
+        final image = Pixer.fromMemory(_transparentPng());
+        try {
+          image.batch().resizeExact(3, 2).invert().saveToFile(output.path);
+
+          final saved = Pixer.fromFile(output.path);
+          expect((saved.width, saved.height), (3, 2));
+          saved.dispose();
+        } finally {
+          image.dispose();
+          await directory.delete(recursive: true);
+        }
+      });
     });
   });
 }
