@@ -32,6 +32,11 @@ part 'pixer_batch.dart';
 /// image.dispose();
 /// ```
 final class Pixer implements ffi.Finalizable {
+  static const _maxUint32 = 0xFFFFFFFF;
+  static const _minInt32 = -0x80000000;
+  static const _maxInt32 = 0x7FFFFFFF;
+  static const _maxFloat32 = 3.4028234663852886e38;
+
   Pixer._(this._handle) : assert(_handle != ffi.nullptr) {
     _finalizer.attach(
       this,
@@ -159,15 +164,48 @@ final class Pixer implements ffi.Finalizable {
   }
 
   void _validateDimensions(int width, int height, {String? context}) {
-    if (width <= 0 || height <= 0) {
-      throw InvalidDimensionsException(context ?? 'width and height must be > 0');
+    if (width <= 0 || height <= 0 || width > _maxUint32 || height > _maxUint32) {
+      throw InvalidDimensionsException(
+        context ?? 'width and height must fit unsigned 32-bit values',
+      );
+    }
+  }
+
+  void _validateCoordinate(int value, String name) {
+    if (value < 0 || value > _maxUint32) {
+      throw InvalidDimensionsException('$name must fit an unsigned 32-bit value');
+    }
+  }
+
+  void _validateBlur(double sigma) {
+    if (!sigma.isFinite || sigma < 0 || sigma > _maxFloat32) {
+      throw ArgumentError.value(
+        sigma,
+        'sigma',
+        'Must be finite, >= 0, and fit a 32-bit float',
+      );
+    }
+  }
+
+  void _validateBrightness(int value) {
+    if (value < _minInt32 || value > _maxInt32) {
+      throw RangeError.range(value, _minInt32, _maxInt32, 'value');
+    }
+  }
+
+  void _validateContrast(double contrast) {
+    if (!contrast.isFinite || contrast.abs() > _maxFloat32) {
+      throw ArgumentError.value(
+        contrast,
+        'contrast',
+        'Must be finite and fit a 32-bit float',
+      );
     }
   }
 
   void _validateCrop(int x, int y, int width, int height) {
-    if (x < 0 || y < 0) {
-      throw InvalidDimensionsException('x and y must be >= 0');
-    }
+    _validateCoordinate(x, 'x');
+    _validateCoordinate(y, 'y');
     _validateDimensions(width, height, context: 'crop width and height must be > 0');
 
     // Bounds validation
@@ -360,9 +398,7 @@ final class Pixer implements ffi.Finalizable {
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer blur(double sigma) {
     _checkDisposed();
-    if (sigma < 0) {
-      throw ArgumentError.value(sigma, 'sigma', 'Must be >= 0');
-    }
+    _validateBlur(sigma);
     final handle = pixer_blur(_handle, sigma);
     return _fromNativeHandle(handle, 'blur');
   }
@@ -376,6 +412,7 @@ final class Pixer implements ffi.Finalizable {
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer brightness(int value) {
     _checkDisposed();
+    _validateBrightness(value);
     final handle = pixer_brighten(_handle, value);
     return _fromNativeHandle(handle, 'brightness');
   }
@@ -388,6 +425,7 @@ final class Pixer implements ffi.Finalizable {
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer contrast(double contrast) {
     _checkDisposed();
+    _validateContrast(contrast);
     final handle = pixer_adjust_contrast(_handle, contrast);
     return _fromNativeHandle(handle, 'contrast');
   }

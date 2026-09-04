@@ -847,6 +847,31 @@ void main() {
       image.dispose();
     });
 
+    test('direct and batch operations share parameter validation', () {
+      final image = Pixer.fromMemory(_transparentPng());
+
+      for (final resize in [
+        () => image.resize(0x100000000, 1),
+        () => image.batch().resize(0x100000000, 1),
+      ]) {
+        expect(resize, throwsA(isA<InvalidDimensionsException>()));
+      }
+      for (final brightness in [
+        () => image.brightness(0x80000000),
+        () => image.batch().brightness(0x80000000),
+      ]) {
+        expect(brightness, throwsA(isA<RangeError>()));
+      }
+      for (final contrast in [
+        () => image.contrast(double.infinity),
+        () => image.batch().contrast(double.infinity),
+      ]) {
+        expect(contrast, throwsA(isA<ArgumentError>()));
+      }
+
+      image.dispose();
+    });
+
     group('batch', () {
       test('applies operations in order and leaves the source unchanged', () {
         final image = Pixer.fromMemory(_transparentPng());

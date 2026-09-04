@@ -36,9 +36,8 @@ final class PixerBatch {
 
   /// Adds a crop evaluated against the image produced by preceding operations.
   PixerBatch crop(int x, int y, int width, int height) {
-    if (x < 0 || y < 0) {
-      throw InvalidDimensionsException('x and y must be >= 0');
-    }
+    _source._validateCoordinate(x, 'x');
+    _source._validateCoordinate(y, 'y');
     _source._validateDimensions(
       width,
       height,
@@ -68,25 +67,19 @@ final class PixerBatch {
 
   /// Adds a Gaussian blur.
   PixerBatch blur(double sigma) {
-    if (!sigma.isFinite || sigma < 0) {
-      throw ArgumentError.value(sigma, 'sigma', 'Must be finite and >= 0');
-    }
+    _source._validateBlur(sigma);
     return _add(_BatchCommand(_BatchOperation.blur, 0, 0, 0, 0, sigma));
   }
 
   /// Adds a brightness adjustment.
   PixerBatch brightness(int value) {
-    if (value < -0x80000000 || value > 0x7FFFFFFF) {
-      throw RangeError.range(value, -0x80000000, 0x7FFFFFFF, 'value');
-    }
+    _source._validateBrightness(value);
     return _add(_BatchCommand(_BatchOperation.brightness, value));
   }
 
   /// Adds a contrast adjustment.
   PixerBatch contrast(double contrast) {
-    if (!contrast.isFinite) {
-      throw ArgumentError.value(contrast, 'contrast', 'Must be finite');
-    }
+    _source._validateContrast(contrast);
     return _add(_BatchCommand(_BatchOperation.contrast, 0, 0, 0, 0, contrast));
   }
 

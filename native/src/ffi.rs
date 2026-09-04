@@ -718,10 +718,12 @@ pub extern "C" fn pixer_batch_to_image(
     match apply_operations(source, operations) {
         Ok(Cow::Owned(image)) => {
             set_error(out_error, ImageErrorCode::Success);
+            set_failed_index(out_failed_index, operation_count);
             into_handle(image)
         }
         Ok(Cow::Borrowed(image)) => {
             set_error(out_error, ImageErrorCode::Success);
+            set_failed_index(out_failed_index, operation_count);
             into_handle(image.clone())
         }
         Err(error) => {
@@ -764,6 +766,7 @@ pub extern "C" fn pixer_batch_write_to(
     match encode_image(image.as_ref(), format, jpeg_quality) {
         Ok(buffer) => {
             buffer_output(buffer, out_data, out_len);
+            set_failed_index(out_failed_index, operation_count);
             ImageErrorCode::Success
         }
         Err(code) => {
@@ -807,7 +810,10 @@ pub extern "C" fn pixer_batch_save(
     };
 
     match image.save(Path::new(&path)) {
-        Ok(()) => ImageErrorCode::Success,
+        Ok(()) => {
+            set_failed_index(out_failed_index, operation_count);
+            ImageErrorCode::Success
+        }
         Err(error) => {
             set_failed_index(out_failed_index, operation_count);
             error_to_code(&error)
