@@ -9,6 +9,9 @@ use std::{
     slice,
 };
 
+#[cfg(target_arch = "wasm32")]
+use std::alloc::{Layout, alloc, dealloc};
+
 /// Error code returned through `out_error` pointers and as the result of
 /// operations that don't return a handle.
 #[allow(dead_code)]
@@ -425,6 +428,28 @@ fn batch_error(error: BatchError, out_failed_index: *mut usize) -> ImageErrorCod
 // Memory Management
 // ============================================================================
 
+/// Allocate aligned linear memory for WebAssembly callers.
+#[cfg(target_arch = "wasm32")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pixer_alloc(size: usize, alignment: usize) -> *mut u8 {
+    let Ok(layout) = Layout::from_size_align(size, alignment) else {
+        return std::ptr::null_mut();
+    };
+    unsafe { alloc(layout) }
+}
+
+/// Free linear memory allocated by `pixer_alloc`.
+#[cfg(target_arch = "wasm32")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pixer_dealloc(ptr: *mut u8, size: usize, alignment: usize) {
+    if ptr.is_null() {
+        return;
+    }
+    if let Ok(layout) = Layout::from_size_align(size, alignment) {
+        unsafe { dealloc(ptr, layout) };
+    }
+}
+
 /// Free a string allocated by Rust
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_free_string(ptr: *mut c_char) {
@@ -606,10 +631,10 @@ pub extern "C" fn pixer_save(handle: *const ImageHandle, path: *const c_char) ->
     .unwrap_or(ImageErrorCode::InvalidPointer)
 }
 
-/// Write an image to a buffer in the specified format
+/// Encode an image to a buffer in the specified format.
 /// Caller must free the buffer using pixer_free_buffer
 #[unsafe(no_mangle)]
-pub extern "C" fn pixer_write_to(
+pub extern "C" fn pixer_encode(
     handle: *const ImageHandle,
     format: ImageFormatEnum,
     out_data: *mut *mut u8,
@@ -636,15 +661,13 @@ pub extern "C" fn pixer_write_to(
     .unwrap_or(ImageErrorCode::InvalidPointer)
 }
 
-/// Write an image to a JPEG buffer with the specified quality.
+/// Encode an image to a JPEG buffer with the specified quality.
 ///
-/// `quality` must be in `1..=100`; `format` must be `Jpeg`. Use
-/// `pixer_write_to` for other formats. Caller must free the buffer using
-/// `pixer_free_buffer`.
+/// `quality` must be in `1..=100`. Use `pixer_encode` for other formats.
+/// Caller must free the buffer using `pixer_free_buffer`.
 #[unsafe(no_mangle)]
-pub extern "C" fn pixer_write_to_with_quality(
+pub extern "C" fn pixer_encode_jpeg(
     handle: *const ImageHandle,
-    format: ImageFormatEnum,
     quality: u8,
     out_data: *mut *mut u8,
     out_len: *mut usize,
@@ -653,7 +676,7 @@ pub extern "C" fn pixer_write_to_with_quality(
         return ImageErrorCode::InvalidPointer;
     }
 
-    if !matches!(format, ImageFormatEnum::Jpeg) || !(1..=100).contains(&quality) {
+    if !(1..=100).contains(&quality) {
         return ImageErrorCode::InvalidParameter;
     }
 
@@ -736,7 +759,7 @@ pub extern "C" fn pixer_batch_to_image(
 /// Apply a batch and encode the final image to a buffer.
 /// Caller must free the buffer using `pixer_free_buffer`.
 #[unsafe(no_mangle)]
-pub extern "C" fn pixer_batch_write_to(
+pub extern "C" fn pixer_batch_encode(
     handle: *const ImageHandle,
     operations: *const PixerOperation,
     operation_count: usize,

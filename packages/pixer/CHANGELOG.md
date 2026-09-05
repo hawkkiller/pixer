@@ -1,3 +1,11 @@
+## Unreleased
+
+- Added browser support backed by the Rust engine compiled to WebAssembly.
+- Added `Pixer.initialize()` for loading the WebAssembly module on web.
+- Shared image validation, batching, encoder configuration, and error mapping across native and web backends.
+- Encoding now belongs to the image backend; use `Pixer.encode(encoder)` instead of the FFI-only `PixerEncoder.encode(handle)` helper.
+- **Breaking:** Renamed the native encoding symbols to `pixer_encode`, `pixer_encode_jpeg`, and `pixer_batch_encode`; the JPEG function no longer takes a redundant format argument.
+
 ## 0.0.9
 
 - Fixed the workspace benchmark package path so analysis and publish validation run successfully.

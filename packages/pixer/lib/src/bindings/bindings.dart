@@ -101,7 +101,7 @@ external int pixer_save(
   ffi.Pointer<ffi.Char> path,
 );
 
-/// Write an image to a buffer in the specified format
+/// Encode an image to a buffer in the specified format.
 /// Caller must free the buffer using pixer_free_buffer
 @ffi.Native<
   ImageErrorCode$1 Function(
@@ -111,30 +111,27 @@ external int pixer_save(
     ffi.Pointer<ffi.UintPtr>,
   )
 >()
-external int pixer_write_to(
+external int pixer_encode(
   ffi.Pointer<ImageHandle> handle,
   int format,
   ffi.Pointer<ffi.Pointer<ffi.Uint8>> out_data,
   ffi.Pointer<ffi.UintPtr> out_len,
 );
 
-/// Write an image to a JPEG buffer with the specified quality.
+/// Encode an image to a JPEG buffer with the specified quality.
 ///
-/// `quality` must be in `1..=100`; `format` must be `Jpeg`. Use
-/// `pixer_write_to` for other formats. Caller must free the buffer using
-/// `pixer_free_buffer`.
+/// `quality` must be in `1..=100`. Use `pixer_encode` for other formats.
+/// Caller must free the buffer using `pixer_free_buffer`.
 @ffi.Native<
   ImageErrorCode$1 Function(
     ffi.Pointer<ImageHandle>,
-    ImageFormatEnum$1,
     ffi.Uint8,
     ffi.Pointer<ffi.Pointer<ffi.Uint8>>,
     ffi.Pointer<ffi.UintPtr>,
   )
 >()
-external int pixer_write_to_with_quality(
+external int pixer_encode_jpeg(
   ffi.Pointer<ImageHandle> handle,
-  int format,
   int quality,
   ffi.Pointer<ffi.Pointer<ffi.Uint8>> out_data,
   ffi.Pointer<ffi.UintPtr> out_len,
@@ -184,7 +181,7 @@ external ffi.Pointer<ImageHandle> pixer_batch_to_image(
     ffi.Pointer<ffi.UintPtr>,
   )
 >()
-external int pixer_batch_write_to(
+external int pixer_batch_encode(
   ffi.Pointer<ImageHandle> handle,
   ffi.Pointer<PixerOperation> operations,
   int operation_count,

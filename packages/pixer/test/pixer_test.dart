@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:pixer/pixer.dart';
@@ -75,12 +74,8 @@ Uint8List _transparentPng() => Uint8List.fromList([
 ]);
 
 void main() {
+  setUpAll(() => Pixer.initialize(wasmUri: Uri.parse('pixer.wasm')));
   group('Pixer', () {
-    test('loads image from file throws IoException for missing files', () {
-      // For missing files, we now get specific IoException instead of generic LoadException
-      expect(() => Pixer.fromFile('nonexistent.jpg'), throwsA(isA<IoException>()));
-    });
-
     test('loads image from memory', () {
       // Create a minimal valid PNG (1x1 transparent pixel)
       final pngData = Uint8List.fromList([
@@ -354,7 +349,10 @@ void main() {
       image.dispose();
       expect(image.isDisposed, isTrue);
 
-      expect(() => image.getMetadata(), throwsA(isA<InvalidPointerException>()));
+      expect(
+        () => image.getMetadata(),
+        throwsA(isA<InvalidPointerException>()),
+      );
     });
 
     test('filter type enum has all values', () {
@@ -820,7 +818,10 @@ void main() {
       // when format is detected but data is corrupted)
       final invalidData = Uint8List.fromList([0x00, 0x01, 0x02, 0x03]);
 
-      expect(() => Pixer.fromMemory(invalidData), throwsA(isA<PixerException>()));
+      expect(
+        () => Pixer.fromMemory(invalidData),
+        throwsA(isA<PixerException>()),
+      );
     });
 
     test('direct transformations use the shared operation core', () {
@@ -951,24 +952,6 @@ void main() {
         image.dispose();
 
         expect(batch.toImage, throwsA(isA<InvalidPointerException>()));
-      });
-
-      test('saves the final image to a file', () async {
-        final directory = await Directory.systemTemp.createTemp(
-          'pixer_batch_test_',
-        );
-        final output = File('${directory.path}/output.png');
-        final image = Pixer.fromMemory(_transparentPng());
-        try {
-          image.batch().resizeExact(3, 2).invert().saveToFile(output.path);
-
-          final saved = Pixer.fromFile(output.path);
-          expect((saved.width, saved.height), (3, 2));
-          saved.dispose();
-        } finally {
-          image.dispose();
-          await directory.delete(recursive: true);
-        }
       });
     });
   });

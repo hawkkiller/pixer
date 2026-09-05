@@ -249,26 +249,24 @@ struct ImageHandle *pixer_load_from_memory_with_format_and_error(const uint8_t *
 ImageErrorCode pixer_save(const struct ImageHandle *handle, const char *path);
 
 /**
- * Write an image to a buffer in the specified format
+ * Encode an image to a buffer in the specified format.
  * Caller must free the buffer using pixer_free_buffer
  */
-ImageErrorCode pixer_write_to(const struct ImageHandle *handle,
-                              ImageFormatEnum format,
-                              uint8_t **out_data,
-                              uintptr_t *out_len);
+ImageErrorCode pixer_encode(const struct ImageHandle *handle,
+                            ImageFormatEnum format,
+                            uint8_t **out_data,
+                            uintptr_t *out_len);
 
 /**
- * Write an image to a JPEG buffer with the specified quality.
+ * Encode an image to a JPEG buffer with the specified quality.
  *
- * `quality` must be in `1..=100`; `format` must be `Jpeg`. Use
- * `pixer_write_to` for other formats. Caller must free the buffer using
- * `pixer_free_buffer`.
+ * `quality` must be in `1..=100`. Use `pixer_encode` for other formats.
+ * Caller must free the buffer using `pixer_free_buffer`.
  */
-ImageErrorCode pixer_write_to_with_quality(const struct ImageHandle *handle,
-                                           ImageFormatEnum format,
-                                           uint8_t quality,
-                                           uint8_t **out_data,
-                                           uintptr_t *out_len);
+ImageErrorCode pixer_encode_jpeg(const struct ImageHandle *handle,
+                                 uint8_t quality,
+                                 uint8_t **out_data,
+                                 uintptr_t *out_len);
 
 /**
  * Get image metadata
@@ -289,14 +287,14 @@ struct ImageHandle *pixer_batch_to_image(const struct ImageHandle *handle,
  * Apply a batch and encode the final image to a buffer.
  * Caller must free the buffer using `pixer_free_buffer`.
  */
-ImageErrorCode pixer_batch_write_to(const struct ImageHandle *handle,
-                                    const struct PixerOperation *operations,
-                                    uintptr_t operation_count,
-                                    ImageFormatEnum format,
-                                    uint8_t jpeg_quality,
-                                    uint8_t **out_data,
-                                    uintptr_t *out_len,
-                                    uintptr_t *out_failed_index);
+ImageErrorCode pixer_batch_encode(const struct ImageHandle *handle,
+                                  const struct PixerOperation *operations,
+                                  uintptr_t operation_count,
+                                  ImageFormatEnum format,
+                                  uint8_t jpeg_quality,
+                                  uint8_t **out_data,
+                                  uintptr_t *out_len,
+                                  uintptr_t *out_failed_index);
 
 /**
  * Apply a batch and save the final image to a file.

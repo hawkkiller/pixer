@@ -7,8 +7,13 @@ edition = "2024"
 crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
-image = "0.25.5"
 libc = "0.2.177"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+image = "0.25.5"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+image = { version = "0.25.5", default-features = false, features = ["bmp", "gif", "ico", "jpeg", "png", "tiff", "webp"] }
 
 [profile.release]
 opt-level = 3
