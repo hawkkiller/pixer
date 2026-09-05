@@ -13,7 +13,9 @@ import 'dart:ffi' as ffi;
 external void pixer_free_string(ffi.Pointer<ffi.Char> ptr);
 
 /// Free image data buffer
-@ffi.Native<ffi.Void Function(ffi.Pointer<ffi.Uint8>, ffi.UintPtr)>(isLeaf: true)
+@ffi.Native<ffi.Void Function(ffi.Pointer<ffi.Uint8>, ffi.UintPtr)>(
+  isLeaf: true,
+)
 external void pixer_free_buffer(ffi.Pointer<ffi.Uint8> ptr, int len);
 
 /// Free an image handle
@@ -26,12 +28,21 @@ external void pixer_free(ffi.Pointer<ImageHandle> handle);
 external ffi.Pointer<ImageHandle> pixer_load(ffi.Pointer<ffi.Char> path);
 
 /// Load an image from memory buffer
-@ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ffi.Uint8>, ffi.UintPtr)>()
-external ffi.Pointer<ImageHandle> pixer_load_from_memory(ffi.Pointer<ffi.Uint8> data, int len);
+@ffi.Native<
+  ffi.Pointer<ImageHandle> Function(ffi.Pointer<ffi.Uint8>, ffi.UintPtr)
+>()
+external ffi.Pointer<ImageHandle> pixer_load_from_memory(
+  ffi.Pointer<ffi.Uint8> data,
+  int len,
+);
 
 /// Load an image from memory with specific format
 @ffi.Native<
-  ffi.Pointer<ImageHandle> Function(ffi.Pointer<ffi.Uint8>, ffi.UintPtr, ImageFormatEnum$1)
+  ffi.Pointer<ImageHandle> Function(
+    ffi.Pointer<ffi.Uint8>,
+    ffi.UintPtr,
+    ImageFormatEnum$1,
+  )
 >()
 external ffi.Pointer<ImageHandle> pixer_load_from_memory_with_format(
   ffi.Pointer<ffi.Uint8> data,
@@ -41,7 +52,10 @@ external ffi.Pointer<ImageHandle> pixer_load_from_memory_with_format(
 
 /// Load an image from a file path with error code output
 @ffi.Native<
-  ffi.Pointer<ImageHandle> Function(ffi.Pointer<ffi.Char>, ffi.Pointer<ImageErrorCode$1>)
+  ffi.Pointer<ImageHandle> Function(
+    ffi.Pointer<ffi.Char>,
+    ffi.Pointer<ImageErrorCode$1>,
+  )
 >()
 external ffi.Pointer<ImageHandle> pixer_load_with_error(
   ffi.Pointer<ffi.Char> path,
@@ -79,8 +93,13 @@ external ffi.Pointer<ImageHandle> pixer_load_from_memory_with_format_and_error(
 );
 
 /// Save an image to a file path
-@ffi.Native<ImageErrorCode$1 Function(ffi.Pointer<ImageHandle>, ffi.Pointer<ffi.Char>)>()
-external int pixer_save(ffi.Pointer<ImageHandle> handle, ffi.Pointer<ffi.Char> path);
+@ffi.Native<
+  ImageErrorCode$1 Function(ffi.Pointer<ImageHandle>, ffi.Pointer<ffi.Char>)
+>()
+external int pixer_save(
+  ffi.Pointer<ImageHandle> handle,
+  ffi.Pointer<ffi.Char> path,
+);
 
 /// Write an image to a buffer in the specified format
 /// Caller must free the buffer using pixer_free_buffer
@@ -122,12 +141,76 @@ external int pixer_write_to_with_quality(
 );
 
 /// Get image metadata
-@ffi.Native<ImageErrorCode$1 Function(ffi.Pointer<ImageHandle>, ffi.Pointer<ImageMetadata>)>(
-  isLeaf: true,
-)
+@ffi.Native<
+  ImageErrorCode$1 Function(
+    ffi.Pointer<ImageHandle>,
+    ffi.Pointer<ImageMetadata>,
+  )
+>(isLeaf: true)
 external int pixer_get_metadata(
   ffi.Pointer<ImageHandle> handle,
   ffi.Pointer<ImageMetadata> out_metadata,
+);
+
+/// Apply a batch and return the final image. The source image is unchanged.
+@ffi.Native<
+  ffi.Pointer<ImageHandle> Function(
+    ffi.Pointer<ImageHandle>,
+    ffi.Pointer<PixerOperation>,
+    ffi.UintPtr,
+    ffi.Pointer<ImageErrorCode$1>,
+    ffi.Pointer<ffi.UintPtr>,
+  )
+>()
+external ffi.Pointer<ImageHandle> pixer_batch_to_image(
+  ffi.Pointer<ImageHandle> handle,
+  ffi.Pointer<PixerOperation> operations,
+  int operation_count,
+  ffi.Pointer<ImageErrorCode$1> out_error,
+  ffi.Pointer<ffi.UintPtr> out_failed_index,
+);
+
+/// Apply a batch and encode the final image to a buffer.
+/// Caller must free the buffer using `pixer_free_buffer`.
+@ffi.Native<
+  ImageErrorCode$1 Function(
+    ffi.Pointer<ImageHandle>,
+    ffi.Pointer<PixerOperation>,
+    ffi.UintPtr,
+    ImageFormatEnum$1,
+    ffi.Uint8,
+    ffi.Pointer<ffi.Pointer<ffi.Uint8>>,
+    ffi.Pointer<ffi.UintPtr>,
+    ffi.Pointer<ffi.UintPtr>,
+  )
+>()
+external int pixer_batch_write_to(
+  ffi.Pointer<ImageHandle> handle,
+  ffi.Pointer<PixerOperation> operations,
+  int operation_count,
+  int format,
+  int jpeg_quality,
+  ffi.Pointer<ffi.Pointer<ffi.Uint8>> out_data,
+  ffi.Pointer<ffi.UintPtr> out_len,
+  ffi.Pointer<ffi.UintPtr> out_failed_index,
+);
+
+/// Apply a batch and save the final image to a file.
+@ffi.Native<
+  ImageErrorCode$1 Function(
+    ffi.Pointer<ImageHandle>,
+    ffi.Pointer<PixerOperation>,
+    ffi.UintPtr,
+    ffi.Pointer<ffi.Char>,
+    ffi.Pointer<ffi.UintPtr>,
+  )
+>()
+external int pixer_batch_save(
+  ffi.Pointer<ImageHandle> handle,
+  ffi.Pointer<PixerOperation> operations,
+  int operation_count,
+  ffi.Pointer<ffi.Char> path,
+  ffi.Pointer<ffi.UintPtr> out_failed_index,
 );
 
 /// Resize the image to fit *within* `width` x `height` while preserving
@@ -189,15 +272,21 @@ external ffi.Pointer<ImageHandle> pixer_crop_imm(
 
 /// Rotate an image 90 degrees clockwise
 @ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>)>()
-external ffi.Pointer<ImageHandle> pixer_rotate90(ffi.Pointer<ImageHandle> handle);
+external ffi.Pointer<ImageHandle> pixer_rotate90(
+  ffi.Pointer<ImageHandle> handle,
+);
 
 /// Rotate an image 180 degrees
 @ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>)>()
-external ffi.Pointer<ImageHandle> pixer_rotate180(ffi.Pointer<ImageHandle> handle);
+external ffi.Pointer<ImageHandle> pixer_rotate180(
+  ffi.Pointer<ImageHandle> handle,
+);
 
 /// Rotate an image 270 degrees clockwise
 @ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>)>()
-external ffi.Pointer<ImageHandle> pixer_rotate270(ffi.Pointer<ImageHandle> handle);
+external ffi.Pointer<ImageHandle> pixer_rotate270(
+  ffi.Pointer<ImageHandle> handle,
+);
 
 /// Flip an image horizontally
 @ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>)>()
@@ -210,27 +299,44 @@ external ffi.Pointer<ImageHandle> pixer_flipv(ffi.Pointer<ImageHandle> handle);
 /// Apply a Gaussian blur with the given standard deviation in pixels.
 ///
 /// `sigma` must be finite and `>= 0`. `sigma == 0` returns an unchanged copy.
-@ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>, ffi.Float)>()
-external ffi.Pointer<ImageHandle> pixer_blur(ffi.Pointer<ImageHandle> handle, double sigma);
+@ffi.Native<
+  ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>, ffi.Float)
+>()
+external ffi.Pointer<ImageHandle> pixer_blur(
+  ffi.Pointer<ImageHandle> handle,
+  double sigma,
+);
 
 /// Add `value` to every channel of every pixel.
 ///
 /// Values are clamped per-channel to `[0, 255]`. Negative values darken,
 /// positive values brighten. The practical range is roughly `-255..=255`;
 /// larger magnitudes simply saturate.
-@ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>, ffi.Int32)>()
-external ffi.Pointer<ImageHandle> pixer_brighten(ffi.Pointer<ImageHandle> handle, int value);
+@ffi.Native<
+  ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>, ffi.Int32)
+>()
+external ffi.Pointer<ImageHandle> pixer_brighten(
+  ffi.Pointer<ImageHandle> handle,
+  int value,
+);
 
 /// Adjust contrast around the midpoint.
 ///
 /// `c == 0.0` leaves the image unchanged. Positive values increase contrast,
 /// negative values decrease it. `c` must be finite.
-@ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>, ffi.Float)>()
-external ffi.Pointer<ImageHandle> pixer_adjust_contrast(ffi.Pointer<ImageHandle> handle, double c);
+@ffi.Native<
+  ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>, ffi.Float)
+>()
+external ffi.Pointer<ImageHandle> pixer_adjust_contrast(
+  ffi.Pointer<ImageHandle> handle,
+  double c,
+);
 
 /// Convert to grayscale
 @ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>)>()
-external ffi.Pointer<ImageHandle> pixer_grayscale(ffi.Pointer<ImageHandle> handle);
+external ffi.Pointer<ImageHandle> pixer_grayscale(
+  ffi.Pointer<ImageHandle> handle,
+);
 
 /// Invert colors (returns new image)
 @ffi.Native<ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>)>()
@@ -368,6 +474,46 @@ enum ImageFormatEnum {
 typedef ImageFormatEnum$1 = ffi.Uint32;
 typedef DartImageFormatEnum = int;
 
+/// Stable operation identifiers shared by the native and Dart batch APIs.
+enum PixerOperationKind {
+  Resize(0),
+  ResizeExact(1),
+  Crop(2),
+  Rotate90(3),
+  Rotate180(4),
+  Rotate270(5),
+  FlipHorizontal(6),
+  FlipVertical(7),
+  Blur(8),
+  Brightness(9),
+  Contrast(10),
+  Grayscale(11),
+  Invert(12);
+
+  final int value;
+  const PixerOperationKind(this.value);
+
+  static PixerOperationKind fromValue(int value) => switch (value) {
+    0 => Resize,
+    1 => ResizeExact,
+    2 => Crop,
+    3 => Rotate90,
+    4 => Rotate180,
+    5 => Rotate270,
+    6 => FlipHorizontal,
+    7 => FlipVertical,
+    8 => Blur,
+    9 => Brightness,
+    10 => Contrast,
+    11 => Grayscale,
+    12 => Invert,
+    _ => throw ArgumentError('Unknown value for PixerOperationKind: $value'),
+  };
+}
+
+typedef PixerOperationKind$1 = ffi.Uint32;
+typedef DartPixerOperationKind = int;
+
 final class ImageHandle extends ffi.Opaque {}
 
 final class ImageMetadata extends ffi.Struct {
@@ -379,4 +525,25 @@ final class ImageMetadata extends ffi.Struct {
 
   @ffi.Uint8()
   external int color_type;
+}
+
+/// One operation in a batch. Arguments are interpreted according to `kind`.
+final class PixerOperation extends ffi.Struct {
+  @ffi.Uint32()
+  external int kind;
+
+  @ffi.Int64()
+  external int arg0;
+
+  @ffi.Int64()
+  external int arg1;
+
+  @ffi.Int64()
+  external int arg2;
+
+  @ffi.Int64()
+  external int arg3;
+
+  @ffi.Double()
+  external double scalar;
 }

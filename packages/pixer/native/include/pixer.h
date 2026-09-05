@@ -138,6 +138,32 @@ enum ImageFormatEnum
 typedef uint32_t ImageFormatEnum;
 #endif // __cplusplus
 
+/**
+ * Stable operation identifiers shared by the native and Dart batch APIs.
+ */
+enum PixerOperationKind
+#ifdef __cplusplus
+  : uint32_t
+#endif // __cplusplus
+ {
+  Resize = 0,
+  ResizeExact = 1,
+  Crop = 2,
+  Rotate90 = 3,
+  Rotate180 = 4,
+  Rotate270 = 5,
+  FlipHorizontal = 6,
+  FlipVertical = 7,
+  Blur = 8,
+  Brightness = 9,
+  Contrast = 10,
+  Grayscale = 11,
+  Invert = 12,
+};
+#ifndef __cplusplus
+typedef uint32_t PixerOperationKind;
+#endif // __cplusplus
+
 typedef struct ImageHandle {
   uint8_t _private[0];
 } ImageHandle;
@@ -147,6 +173,18 @@ typedef struct ImageMetadata {
   uint32_t height;
   uint8_t color_type;
 } ImageMetadata;
+
+/**
+ * One operation in a batch. Arguments are interpreted according to `kind`.
+ */
+typedef struct PixerOperation {
+  uint32_t kind;
+  int64_t arg0;
+  int64_t arg1;
+  int64_t arg2;
+  int64_t arg3;
+  double scalar;
+} PixerOperation;
 
 #ifdef __cplusplus
 extern "C" {
@@ -237,6 +275,37 @@ ImageErrorCode pixer_write_to_with_quality(const struct ImageHandle *handle,
  */
 ImageErrorCode pixer_get_metadata(const struct ImageHandle *handle,
                                   struct ImageMetadata *out_metadata);
+
+/**
+ * Apply a batch and return the final image. The source image is unchanged.
+ */
+struct ImageHandle *pixer_batch_to_image(const struct ImageHandle *handle,
+                                         const struct PixerOperation *operations,
+                                         uintptr_t operation_count,
+                                         ImageErrorCode *out_error,
+                                         uintptr_t *out_failed_index);
+
+/**
+ * Apply a batch and encode the final image to a buffer.
+ * Caller must free the buffer using `pixer_free_buffer`.
+ */
+ImageErrorCode pixer_batch_write_to(const struct ImageHandle *handle,
+                                    const struct PixerOperation *operations,
+                                    uintptr_t operation_count,
+                                    ImageFormatEnum format,
+                                    uint8_t jpeg_quality,
+                                    uint8_t **out_data,
+                                    uintptr_t *out_len,
+                                    uintptr_t *out_failed_index);
+
+/**
+ * Apply a batch and save the final image to a file.
+ */
+ImageErrorCode pixer_batch_save(const struct ImageHandle *handle,
+                                const struct PixerOperation *operations,
+                                uintptr_t operation_count,
+                                const char *path,
+                                uintptr_t *out_failed_index);
 
 /**
  * Resize the image to fit *within* `width` x `height` while preserving

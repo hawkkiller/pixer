@@ -1,3 +1,8 @@
+## 0.0.9
+
+- Fixed the workspace benchmark package path so analysis and publish validation run successfully.
+- Added lazy operation batches with `toImage()`, `encode()`, and `saveToFile()` terminals.
+
 ## 0.0.8
 
 - Provide example and improve pubdev points.

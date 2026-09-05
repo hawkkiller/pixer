@@ -11,6 +11,8 @@ include = [
   "ImageFormatEnum",
   "FilterTypeEnum",
   "ImageMetadata",
+  "PixerOperation",
+  "PixerOperationKind",
 ]
 
 [parse]
