@@ -1,5 +1,6 @@
 ## Unreleased
 
+- Added a minimal Flutter showcase for Android, iOS, Linux, macOS, Windows, and WebAssembly.
 - Added browser support backed by the Rust engine compiled to WebAssembly.
 - Added `Pixer.initialize()` for loading the WebAssembly module on web.
 - Shared image validation, batching, encoder configuration, and error mapping across native and web backends.

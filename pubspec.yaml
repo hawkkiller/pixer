@@ -7,6 +7,7 @@ environment:
 workspace:
   - packages/pixer
   - packages/benchmark
+  - packages/showcase
   # - upscale_flutter
 
 hooks:
