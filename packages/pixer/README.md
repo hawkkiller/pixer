@@ -11,6 +11,28 @@ dependencies:
 
 Native binaries are downloaded automatically via Dart build hooks.
 
+### WebAssembly
+
+Download `pixer.wasm` from the matching GitHub release into your app's web
+root, then initialize Pixer before loading images:
+
+```dart
+await Pixer.initialize(); // Fetches pixer.wasm relative to the page.
+final image = Pixer.fromMemory(bytes);
+```
+
+You can instead pass `wasmUri` or `wasmBytes` to `initialize`. For local
+development of this repository, build the module with:
+
+```bash
+dart packages/pixer/tool/build_wasm.dart web/pixer.wasm
+```
+
+Browser builds support the byte-based API. `fromFile`, `saveToFile`, and the
+batch `saveToFile` terminal throw `UnsupportedError`; use `fromMemory` and
+`encode` instead. The web implementation is compatible with both `dart2js`
+and Dart/Flutter Wasm builds.
+
 ## Quick Start
 
 ```dart
@@ -130,9 +152,9 @@ print('${image.width}x${image.height}');
 
 ## Resource Management
 
-Every `Pixer` owns a native handle. Call `dispose()` when done — including intermediates in a pipeline.
-Each pixer is assigned a finalizer, which frees the native handle when the pixer is garbage collected.
-However, the finalizer is not guaranteed to run, especially across isolates. It is **strongly recommended** to call `dispose()` explicitly.
+Every `Pixer` owns a Rust handle. Call `dispose()` when done — including intermediates in a pipeline.
+Native builds assign a finalizer that frees the handle when the object is garbage collected,
+but finalizers are not guaranteed to run. Web builds require explicit disposal.
 
 Batch operations keep their intermediates inside Rust. Only a `toImage()` result
 owns a new native handle that must be disposed.
@@ -169,7 +191,7 @@ All errors throw typed `PixerException` subclasses:
 
 ## Platforms
 
-Linux, macOS, Windows, Android, iOS
+Linux, macOS, Windows, Android, iOS, Web (WebAssembly)
 
 ## Roadmap
 
@@ -182,6 +204,7 @@ Linux, macOS, Windows, Android, iOS
 - [x] Encoder objects with JPEG quality support
 - [x] Lazy batch processing with image, byte, and file outputs
 - [x] Full platform support (Linux, macOS, Windows, Android, iOS)
+- [x] Web support through the Rust WebAssembly build
 
 ### Planned — `image` crate
 - [ ] Hue rotation

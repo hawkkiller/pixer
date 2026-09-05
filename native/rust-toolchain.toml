@@ -2,6 +2,8 @@
 channel = "1.90.0"
 
 targets = [
+  "wasm32-unknown-unknown",
+
   # Android
   "armv7-linux-androideabi",
   "aarch64-linux-android",

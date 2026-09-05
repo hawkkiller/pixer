@@ -18,6 +18,29 @@ on:
   workflow_dispatch:
 
 jobs:
+  wasm:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/pixer/
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+      - uses: dart-lang/setup-dart@e51d8e571e22473a2ddebf0ef8a2123f0ab2c02c
+        with:
+          sdk: main
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: dart tool/build_wasm.dart libs/pixer.wasm
+      - run: cp libs/pixer.wasm test/pixer.wasm
+      - run: dart test -p chrome test/pixer_test.dart test/pixer_wasm_test.dart
+      - run: dart test -p chrome --compiler dart2wasm test/pixer_test.dart test/pixer_wasm_test.dart
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wasm
+          path: packages/pixer/libs/pixer.wasm
+          if-no-files-found: error
+
   build:
     strategy:
       fail-fast: false
@@ -134,7 +157,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: build
+    needs: [build, wasm]
     runs-on: ubuntu-latest
 
     defaults:

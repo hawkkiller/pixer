@@ -3,13 +3,6 @@
 Pixer is a cross-platform library for image manipulation: resize, crop, rotate, create thumbnails, combine images, and more.
 It uses Rust's image crate via FFI to provide high-performance image processing.
 
-## Project Structure
-
-- `/native` - Rust crate (pixer) with image processing logic
-- `/packages/pixer` - Main Dart package with FFI bindings
-- `/packages/benchmarks` - Performance benchmarks
-- `/packages/upscale_flutter` - Flutter demo app
-
 ## Useful Commands
 
 ```bash
