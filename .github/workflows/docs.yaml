@@ -5,18 +5,12 @@ on:
     branches: [main]
     paths:
       - .github/workflows/docs.yaml
-      - blume.config.ts
       - docs/**
-      - package.json
-      - package-lock.json
   push:
     branches: [main]
     paths:
       - .github/workflows/docs.yaml
-      - blume.config.ts
       - docs/**
-      - package.json
-      - package-lock.json
   workflow_dispatch:
 
 permissions:
@@ -29,12 +23,16 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
           node-version: "22.12"
           cache: npm
+          cache-dependency-path: docs/package-lock.json
       - run: npm ci
       - run: npm run docs:build
       - uses: actions/configure-pages@v5
@@ -42,7 +40,7 @@ jobs:
       - uses: actions/upload-pages-artifact@v4
         if: github.event_name != 'pull_request'
         with:
-          path: dist
+          path: docs/dist
 
   deploy:
     if: github.event_name != 'pull_request'

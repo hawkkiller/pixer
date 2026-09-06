@@ -11,8 +11,10 @@ Try every image operation in the minimal [Flutter showcase](packages/showcase/RE
 ## Documentation
 
 ```bash
+cd docs
 npm install
 npm run docs:dev
 ```
 
-Blume builds the production site into `dist/` with `npm run docs:build`.
+Blume builds the production site into `docs/dist/` with
+`cd docs && npm run docs:build`.
