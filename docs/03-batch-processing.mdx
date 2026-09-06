@@ -1,0 +1,48 @@
+---
+title: Batch processing
+description: Run several image operations in one native or WebAssembly call.
+---
+
+`batch()` records operations and executes them only when you request an image,
+bytes, or a file. This avoids Dart-visible intermediate images.
+
+## Encode a batch
+
+```dart
+final bytes = image
+    .batch()
+    .resize(800, 600)
+    .grayscale()
+    .encode(PixerJpegEncoder(quality: 85));
+```
+
+## Return an image
+
+```dart
+final result = image
+    .batch()
+    .crop(10, 10, 200, 200)
+    .rotate90()
+    .toImage();
+
+try {
+  print('${result.width}x${result.height}');
+} finally {
+  result.dispose();
+}
+```
+
+## Save a batch
+
+```dart
+image.batch().resize(320, 240).saveToFile('thumbnail.png');
+```
+
+The original `Pixer` remains unchanged. Sequence-dependent validation, such as
+crop bounds after a resize, is evaluated against the preceding operation's
+output.
+
+:::warning
+`saveToFile` is unavailable in browser builds. Use `encode` and handle the
+returned bytes instead.
+:::

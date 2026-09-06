@@ -1,0 +1,45 @@
+---
+title: WebAssembly
+description: Load Pixer and process image bytes in browser applications.
+---
+
+Browser builds use the same Dart API backed by `pixer.wasm`.
+
+## Add the module
+
+Download `pixer.wasm` from the GitHub release matching your Pixer package
+version and place it in the application's web root.
+
+Initialize Pixer before loading an image:
+
+```dart
+await Pixer.initialize();
+
+final image = Pixer.fromMemory(bytes);
+try {
+  final output = image
+      .batch()
+      .resize(800, 600)
+      .encode(const PixerWebPEncoder());
+} finally {
+  image.dispose();
+}
+```
+
+By default, Pixer fetches `pixer.wasm` relative to the page. You can supply a
+different URL or provide the module bytes directly:
+
+```dart
+await Pixer.initialize(wasmUri: Uri.parse('/assets/pixer.wasm'));
+
+// Or:
+await Pixer.initialize(wasmBytes: wasmBytes);
+```
+
+## Browser API limits
+
+Use `fromMemory` and `encode` on the web. `fromFile`, `saveToFile`, and batch
+`saveToFile` throw `UnsupportedError` because browsers do not expose native file
+paths.
+
+Pixer supports both JavaScript-compiled and Dart/Flutter Wasm builds.

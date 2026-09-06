@@ -1,0 +1,62 @@
+---
+title: Image operations
+description: Resize, crop, rotate, flip, and adjust images.
+---
+
+Direct operations return a new `Pixer` instance and leave the original image
+unchanged.
+
+## Resize
+
+```dart
+final fitted = image.resize(800, 600);
+final exact = image.resizeExact(800, 600);
+```
+
+`resize` preserves the aspect ratio. `resizeExact` may stretch or squash the
+image.
+
+Choose a resize filter when needed:
+
+```dart
+final pixels = image.resize(
+  320,
+  240,
+  filter: FilterTypeEnum.Nearest,
+);
+```
+
+The available filters are `Nearest`, `Triangle`, `CatmullRom`, `Gaussian`, and
+`Lanczos3`. `Lanczos3` is the default.
+
+## Crop
+
+```dart
+final cropped = image.crop(100, 100, 400, 300);
+```
+
+The arguments are `x`, `y`, `width`, and `height`. The crop rectangle must fit
+inside the image.
+
+## Rotate and flip
+
+```dart
+final clockwise = image.rotate90();
+final upsideDown = image.rotate180();
+final counterClockwise = image.rotate270();
+final mirrored = image.flipHorizontal();
+final vertical = image.flipVertical();
+```
+
+## Adjust
+
+```dart
+final soft = image.blur(2.5);
+final lighter = image.brightness(30);
+final punchier = image.contrast(20);
+final gray = image.grayscale();
+final negative = image.invert();
+```
+
+Remember to dispose every returned image after use. For several operations,
+prefer a [batch](/batch-processing) so intermediate images remain inside Rust.
