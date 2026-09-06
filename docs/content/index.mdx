@@ -1,0 +1,60 @@
+---
+title: Pixer
+description: Fast, cross-platform image manipulation for Dart, powered by Rust.
+sidebar:
+  label: Introduction
+  order: 0
+---
+
+Pixer provides image resizing, cropping, rotation, adjustments, encoding, and
+batch processing through one Dart API. Rust does the image work through native
+FFI or WebAssembly.
+
+:::note
+Pixer supports Android, iOS, Linux, macOS, Windows, and the web.
+:::
+
+## Install
+
+Add Pixer to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+  pixer: ^0.0.10
+```
+
+Native binaries are downloaded automatically by Dart build hooks.
+
+## Process an image
+
+```dart
+import 'package:pixer/pixer.dart';
+
+final image = Pixer.fromFile('input.jpg');
+try {
+  final resized = image.resize(800, 600);
+  try {
+    resized.saveToFile('output.png');
+  } finally {
+    resized.dispose();
+  }
+} finally {
+  image.dispose();
+}
+```
+
+Every operation returns a new image. The source image is never changed.
+
+## What next?
+
+<CardGroup>
+  <Card title="Getting started" href="/getting-started">
+    Load, transform, and encode your first image.
+  </Card>
+  <Card title="Image operations" href="/image-operations">
+    Resize, crop, rotate, flip, and adjust images.
+  </Card>
+  <Card title="WebAssembly" href="/webassembly">
+    Use the byte-based API in browser applications.
+  </Card>
+</CardGroup>
