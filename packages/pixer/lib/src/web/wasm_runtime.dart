@@ -1,6 +1,8 @@
 import 'dart:js_interop';
 import 'dart:typed_data';
 
+import '../abi.dart';
+
 import '../enums.dart';
 import '../image_metadata.dart';
 import '../pixer_exception.dart';
@@ -31,6 +33,7 @@ extension type _Memory._(JSObject _) implements JSObject {
 }
 
 extension type _Exports._(JSObject _) implements JSObject {
+  external int pixer_abi_version();
   external _Memory get memory;
   external int pixer_alloc(int size, int alignment);
   external void pixer_dealloc(int pointer, int size, int alignment);
@@ -119,7 +122,18 @@ final class WasmRuntime {
     final source = _InstantiatedSource._(
       await _instantiate(moduleBytes, imports).toDart,
     );
-    return WasmRuntime._(source.instance.exports);
+    final exports = source.instance.exports;
+    final int version;
+    try {
+      version = exports.pixer_abi_version();
+    } catch (error) {
+      throw StateError(
+        'Pixer WASM has no usable ABI version. Rebuild or download pixer.wasm '
+        'matching this Pixer package. Cause: $error',
+      );
+    }
+    checkPixerAbi(version);
+    return WasmRuntime._(exports);
   }
 
   ByteBuffer get _buffer => _exports.memory.buffer.toDart;

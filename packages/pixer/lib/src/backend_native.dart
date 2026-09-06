@@ -2,6 +2,7 @@ import 'dart:ffi' as ffi;
 import 'dart:typed_data';
 import 'package:ffi/ffi.dart' as ffi;
 
+import 'abi.dart';
 import 'bindings/bindings.dart'
     hide FilterTypeEnum, ImageErrorCode, ImageFormatEnum, PixerOperationKind;
 import 'enums.dart';
@@ -15,13 +16,11 @@ final class BackendImage implements ffi.Finalizable {
   BackendImage._(this._handle) {
     if (_handle == ffi.nullptr) throw UnknownException('operation: image');
     try {
-      final metadata = getMetadata();
       _finalizer.attach(
         this,
         _handle.cast(),
         detach: this,
-        externalSize:
-            metadata.width * metadata.height * (metadata.colorType.value + 1),
+        externalSize: pixer_image_byte_length(_handle),
       );
     } catch (_) {
       pixer_free(_handle);
@@ -37,9 +36,32 @@ final class BackendImage implements ffi.Finalizable {
         .cast(),
   );
 
-  static Future<void> initialize({Uint8List? wasmBytes, Uri? wasmUri}) async {}
+  static final bool _compatible = _checkAbi();
+
+  static bool _checkAbi() {
+    final int version;
+    try {
+      version = pixer_abi_version();
+    } catch (error) {
+      throw StateError(
+        'Pixer binary has no usable ABI version. Rebuild or download the '
+        'binary matching this Pixer package. Cause: $error',
+      );
+    }
+    checkPixerAbi(version);
+    return true;
+  }
+
+  static void _ensureCompatible() {
+    if (!_compatible) throw StateError('Pixer ABI check failed');
+  }
+
+  static Future<void> initialize({Uint8List? wasmBytes, Uri? wasmUri}) async {
+    _ensureCompatible();
+  }
 
   factory BackendImage.fromFile(String path) => ffi.using((arena) {
+    _ensureCompatible();
     final error = arena<ffi.Uint32>();
     final handle = pixer_load_with_error(
       path.toNativeUtf8(allocator: arena).cast(),
@@ -51,6 +73,7 @@ final class BackendImage implements ffi.Finalizable {
 
   factory BackendImage.fromMemory(Uint8List bytes, [ImageFormatEnum? format]) =>
       ffi.using((arena) {
+        _ensureCompatible();
         final data = arena<ffi.Uint8>(bytes.length);
         data.asTypedList(bytes.length).setAll(0, bytes);
         final error = arena<ffi.Uint32>();

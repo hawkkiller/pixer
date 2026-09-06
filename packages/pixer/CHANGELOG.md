@@ -1,5 +1,10 @@
 ## Unreleased
 
+- Fixed zero blur changing pixels and rejected subnormal blur values before they can panic in Rust.
+- Preserved alpha and bit depth in grayscale conversion and prevented extreme brightness offsets from overflowing.
+- Accounted for actual native pixel-buffer bytes, including 16-bit and floating-point images.
+- Added native/WASM ABI version checks and compile-time WASM layout checks. Rebuild binaries for this package revision.
+
 - Added a minimal Flutter showcase for Android, iOS, Linux, macOS, Windows, and WebAssembly.
 - Added browser support backed by the Rust engine compiled to WebAssembly.
 - Added `Pixer.initialize()` for loading the WebAssembly module on web.

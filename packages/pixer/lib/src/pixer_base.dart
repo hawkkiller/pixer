@@ -36,6 +36,7 @@ final class Pixer {
   static const _minInt32 = -0x80000000;
   static const _maxInt32 = 0x7FFFFFFF;
   static const _maxFloat32 = 3.4028234663852886e38;
+  static const _minNormalFloat32 = 1.1754943508222875e-38;
 
   Pixer._(this._backend);
   final BackendImage _backend;
@@ -107,11 +108,14 @@ final class Pixer {
   }
 
   void _validateBlur(double sigma) {
-    if (!sigma.isFinite || sigma < 0 || sigma > _maxFloat32) {
+    if (!sigma.isFinite ||
+        sigma < 0 ||
+        sigma > _maxFloat32 ||
+        (sigma > 0 && sigma < _minNormalFloat32)) {
       throw ArgumentError.value(
         sigma,
         'sigma',
-        'Must be finite, >= 0, and fit a 32-bit float',
+        'Must be zero or a positive normal 32-bit float',
       );
     }
   }
@@ -336,7 +340,7 @@ final class Pixer {
   ///
   /// [sigma] controls the blur strength (higher = more blur).
   /// A value of 0 results in no change.
-  /// Throws [ArgumentError] if sigma is negative.
+  /// Throws [ArgumentError] unless sigma is zero or a positive normal 32-bit float.
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer blur(double sigma) {
     _checkDisposed();
@@ -348,10 +352,11 @@ final class Pixer {
     );
   }
 
-  /// Adjusts brightness by adding [value] to every channel.
+  /// Adjusts brightness by adding [value] to color channels, preserving alpha.
   ///
-  /// Values are clamped per-channel to `[0, 255]`. Negative values darken,
-  /// positive values brighten. The practical range is roughly `-255..=255`;
+  /// Values are clamped to the channel range (`[0, 255]` for 8-bit images).
+  /// Negative values darken, positive values brighten. For 8-bit images the
+  /// practical range is roughly `-255..=255`;
   /// larger magnitudes simply saturate.
   ///
   /// Returns a new [Pixer] instance. The original is not modified.

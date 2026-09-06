@@ -11,6 +11,11 @@ dependencies:
 
 Native binaries are downloaded automatically via Dart build hooks.
 
+Native and WebAssembly binaries must match the package's ABI version. Pixer
+checks this before loading images (or during `initialize`) and throws a
+`StateError` for missing or incompatible ABI versions. Rebuild or download the
+matching binary when upgrading; replace any cached `pixer.wasm` as well.
+
 ### WebAssembly
 
 Download `pixer.wasm` from the matching GitHub release into your app's web
@@ -90,9 +95,12 @@ final vFlip = image.flipVertical();
 final blurred = image.blur(2.5);       // Gaussian blur, sigma in pixels
 final bright = image.brightness(30);   // Add to each channel; clamps to [0, 255]
 final punchier = image.contrast(20);   // 0 = unchanged, positive boosts, negative flattens
-final gray = image.grayscale();
+final gray = image.grayscale();       // Preserves alpha and bit depth
 final inverted = image.invert();
 ```
+
+`blur(0)` returns an unchanged copy. Positive blur values must fit a normal
+32-bit float; subnormal values are rejected with `ArgumentError`.
 
 ### Resize Filters
 

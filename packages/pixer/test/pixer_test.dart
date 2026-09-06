@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:image/image.dart' as img;
 import 'package:pixer/pixer.dart';
 import 'package:test/test.dart';
 
@@ -76,6 +77,104 @@ Uint8List _transparentPng() => Uint8List.fromList([
 void main() {
   setUpAll(() => Pixer.initialize(wasmUri: Uri.parse('pixer.wasm')));
   group('Pixer', () {
+    for (final format in [img.Format.uint8, img.Format.uint16]) {
+      final maximum = format == img.Format.uint8 ? 255 : 65535;
+      final middle = format == img.Format.uint8 ? 73 : 12345;
+
+      img.Image fixture() =>
+          img.Image(width: 3, height: 1, numChannels: 4, format: format)
+            ..setPixelRgba(0, 0, 0, 0, 0, 0)
+            ..setPixelRgba(1, 0, maximum, maximum, maximum, maximum)
+            ..setPixelRgba(2, 0, middle, middle, middle, maximum ~/ 2);
+
+      List<List<num>> pixels(img.Image image) => [
+        for (final pixel in image)
+          // Grayscale+alpha PNGs may decode into two stored channels.
+          if (image.numChannels == 2)
+            [pixel[0], pixel[0], pixel[0], pixel[1]]
+          else
+            [pixel.r, pixel.g, pixel.b, pixel.a],
+      ];
+
+      test('zero blur preserves ${format.name} pixels and alpha', () {
+        final input = fixture();
+        final source = Pixer.fromMemory(img.encodePng(input));
+        addTearDown(source.dispose);
+        for (final output in [
+          source.blur(0),
+          source.batch().blur(0).toImage(),
+        ]) {
+          addTearDown(output.dispose);
+          final decoded = img.decodePng(
+            output.encode(const PixerPngEncoder()),
+          )!;
+          expect(decoded.format, format);
+          expect(pixels(decoded), pixels(input));
+        }
+        expect(
+          pixels(img.decodePng(source.encode(const PixerPngEncoder()))!),
+          pixels(input),
+        );
+      });
+
+      test('grayscale preserves ${format.name} precision and alpha', () {
+        final input = fixture();
+        final source = Pixer.fromMemory(img.encodePng(input));
+        addTearDown(source.dispose);
+        for (final output in [
+          source.grayscale(),
+          source.batch().grayscale().toImage(),
+        ]) {
+          addTearDown(output.dispose);
+          expect(output.colorType, ColorType.luminanceAlpha);
+          final decoded = img.decodePng(
+            output.encode(const PixerPngEncoder()),
+          )!;
+          expect(decoded.format, format);
+          expect(pixels(decoded), pixels(input));
+        }
+      });
+
+      test(
+        'extreme brightness saturates ${format.name} and preserves alpha',
+        () {
+          final input = fixture();
+          final source = Pixer.fromMemory(img.encodePng(input));
+          addTearDown(source.dispose);
+          for (final offset in [-0x80000000, 0x7fffffff]) {
+            for (final output in [
+              source.brightness(offset),
+              source.batch().brightness(offset).toImage(),
+            ]) {
+              addTearDown(output.dispose);
+              final decoded = img.decodePng(
+                output.encode(const PixerPngEncoder()),
+              )!;
+              expect(decoded.format, format);
+              for (var x = 0; x < input.width; x++) {
+                final pixel = decoded.getPixel(x, 0);
+                final expected = offset < 0 ? 0 : maximum;
+                expect(
+                  [pixel.r, pixel.g, pixel.b],
+                  [expected, expected, expected],
+                );
+                expect(pixel.a, input.getPixel(x, 0).a);
+              }
+            }
+          }
+        },
+      );
+    }
+
+    test('rejects blur values that become subnormal or underflow in f32', () {
+      final source = Pixer.fromMemory(_transparentPng());
+      addTearDown(source.dispose);
+      for (final sigma in [1e-40, 1e-50]) {
+        expect(() => source.blur(sigma), throwsArgumentError);
+        expect(() => source.batch().blur(sigma), throwsArgumentError);
+      }
+    });
+
     test('loads image from memory', () {
       // Create a minimal valid PNG (1x1 transparent pixel)
       final pngData = Uint8List.fromList([

@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:ffigen/ffigen.dart';
 
 const _leafSymbols = {
+  'pixer_abi_version',
+  'pixer_image_byte_length',
   'pixer_free_string',
   'pixer_free_buffer',
   'pixer_free',
