@@ -191,6 +191,16 @@ extern "C" {
 #endif // __cplusplus
 
 /**
+ * ABI contract version. Increment for incompatible signatures, layouts, or IDs.
+ */
+uint32_t pixer_abi_version(void);
+
+/**
+ * Pixel-buffer byte length for native memory accounting; zero for a null handle.
+ */
+uintptr_t pixer_image_byte_length(const struct ImageHandle *handle);
+
+/**
  * Free a string allocated by Rust
  */
 void pixer_free_string(char *ptr);
@@ -365,16 +375,15 @@ struct ImageHandle *pixer_flipv(const struct ImageHandle *handle);
 /**
  * Apply a Gaussian blur with the given standard deviation in pixels.
  *
- * `sigma` must be finite and `>= 0`. `sigma == 0` returns an unchanged copy.
+ * `sigma` must be zero or a positive normal f32. Zero returns an unchanged copy.
  */
 struct ImageHandle *pixer_blur(const struct ImageHandle *handle, float sigma);
 
 /**
- * Add `value` to every channel of every pixel.
+ * Add `value` to color channels, preserving alpha.
  *
- * Values are clamped per-channel to `[0, 255]`. Negative values darken,
- * positive values brighten. The practical range is roughly `-255..=255`;
- * larger magnitudes simply saturate.
+ * Values are clamped to the channel range (`[0, 255]` for 8-bit images).
+ * Negative values darken, positive values brighten; larger magnitudes saturate.
  */
 struct ImageHandle *pixer_brighten(const struct ImageHandle *handle, int32_t value);
 

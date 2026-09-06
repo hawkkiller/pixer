@@ -128,6 +128,25 @@ pub struct PixerOperation {
     pub scalar: f64,
 }
 
+// Keep the handwritten wasm32 memory accessors in wasm_runtime.dart in sync.
+#[cfg(target_arch = "wasm32")]
+const _: () = {
+    use std::mem::{align_of, offset_of, size_of};
+    assert!(size_of::<usize>() == 4);
+    assert!(size_of::<ImageMetadata>() == 12);
+    assert!(offset_of!(ImageMetadata, width) == 0);
+    assert!(offset_of!(ImageMetadata, height) == 4);
+    assert!(offset_of!(ImageMetadata, color_type) == 8);
+    assert!(size_of::<PixerOperation>() == 48);
+    assert!(align_of::<PixerOperation>() == 8);
+    assert!(offset_of!(PixerOperation, kind) == 0);
+    assert!(offset_of!(PixerOperation, arg0) == 8);
+    assert!(offset_of!(PixerOperation, arg1) == 16);
+    assert!(offset_of!(PixerOperation, arg2) == 24);
+    assert!(offset_of!(PixerOperation, arg3) == 32);
+    assert!(offset_of!(PixerOperation, scalar) == 40);
+};
+
 /// Stable operation identifiers shared by the native and Dart batch APIs.
 #[derive(Clone, Copy)]
 #[repr(u32)]
@@ -334,12 +353,21 @@ fn apply_operation(
             {
                 return Err(ImageErrorCode::InvalidParameter);
             }
-            Ok(image.blur(operation.scalar as f32))
+            if operation.scalar == 0.0 {
+                return Ok(image.clone());
+            }
+            let sigma = operation.scalar as f32;
+            if !sigma.is_normal() {
+                return Err(ImageErrorCode::InvalidParameter);
+            }
+            Ok(image.blur(sigma))
         }
         PixerOperationKind::Brightness => {
             let value =
                 i32::try_from(operation.arg0).map_err(|_| ImageErrorCode::InvalidParameter)?;
-            Ok(image.brighten(value))
+            // Integer images have at most 16 bits per channel. Larger offsets
+            // already saturate; cap them before the dependency's i32 addition.
+            Ok(image.brighten(value.clamp(-65535, 65535)))
         }
         PixerOperationKind::Contrast => {
             if !operation.scalar.is_finite()
@@ -350,7 +378,7 @@ fn apply_operation(
             }
             Ok(image.adjust_contrast(operation.scalar as f32))
         }
-        PixerOperationKind::Grayscale => Ok(DynamicImage::ImageLuma8(image.to_luma8())),
+        PixerOperationKind::Grayscale => Ok(image.grayscale()),
         PixerOperationKind::Invert => {
             let mut image = image.clone();
             image.invert();
@@ -427,6 +455,18 @@ fn batch_error(error: BatchError, out_failed_index: *mut usize) -> ImageErrorCod
 // ============================================================================
 // Memory Management
 // ============================================================================
+
+/// ABI contract version. Increment for incompatible signatures, layouts, or IDs.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixer_abi_version() -> u32 {
+    1
+}
+
+/// Pixel-buffer byte length for native memory accounting; zero for a null handle.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixer_image_byte_length(handle: *const ImageHandle) -> usize {
+    with_image(handle, |image| image.as_bytes().len()).unwrap_or(0)
+}
 
 /// Allocate aligned linear memory for WebAssembly callers.
 #[cfg(target_arch = "wasm32")]
@@ -950,7 +990,7 @@ pub extern "C" fn pixer_flipv(handle: *const ImageHandle) -> *mut ImageHandle {
 
 /// Apply a Gaussian blur with the given standard deviation in pixels.
 ///
-/// `sigma` must be finite and `>= 0`. `sigma == 0` returns an unchanged copy.
+/// `sigma` must be zero or a positive normal f32. Zero returns an unchanged copy.
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_blur(handle: *const ImageHandle, sigma: f32) -> *mut ImageHandle {
     apply_single(
@@ -962,11 +1002,10 @@ pub extern "C" fn pixer_blur(handle: *const ImageHandle, sigma: f32) -> *mut Ima
     )
 }
 
-/// Add `value` to every channel of every pixel.
+/// Add `value` to color channels, preserving alpha.
 ///
-/// Values are clamped per-channel to `[0, 255]`. Negative values darken,
-/// positive values brighten. The practical range is roughly `-255..=255`;
-/// larger magnitudes simply saturate.
+/// Values are clamped to the channel range (`[0, 255]` for 8-bit images).
+/// Negative values darken, positive values brighten; larger magnitudes saturate.
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_brighten(handle: *const ImageHandle, value: i32) -> *mut ImageHandle {
     apply_single(
@@ -1003,4 +1042,37 @@ pub extern "C" fn pixer_grayscale(handle: *const ImageHandle) -> *mut ImageHandl
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_invert(handle: *const ImageHandle) -> *mut ImageHandle {
     apply_single(handle, operation(PixerOperationKind::Invert))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn blur_rejects_subnormal_and_underflowing_scalars() {
+        let image = DynamicImage::new_rgba8(3, 1);
+        for scalar in [1e-40, 1e-50] {
+            let mut op = operation(PixerOperationKind::Blur);
+            op.scalar = scalar;
+            assert!(matches!(
+                apply_operation(&image, &op),
+                Err(ImageErrorCode::InvalidParameter)
+            ));
+        }
+    }
+
+    #[test]
+    fn memory_accounting_uses_actual_channel_storage() {
+        for (image, expected) in [
+            (DynamicImage::new_rgba8(3, 2), 24),
+            (DynamicImage::new_rgba16(3, 2), 48),
+            (DynamicImage::new_rgb32f(3, 2), 72),
+            (DynamicImage::new_rgba32f(3, 2), 96),
+        ] {
+            let handle = into_handle(image);
+            assert_eq!(pixer_image_byte_length(handle), expected);
+            pixer_free(handle);
+        }
+        assert_eq!(pixer_image_byte_length(std::ptr::null()), 0);
+    }
 }

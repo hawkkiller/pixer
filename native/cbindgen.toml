@@ -4,6 +4,7 @@ style = "both"
 cpp_compat = true
 
 [export]
+exclude = ["pixer_alloc", "pixer_dealloc"]
 include = [
   "ImageHandle",
   "ImageResult",

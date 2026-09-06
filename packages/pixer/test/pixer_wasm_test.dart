@@ -13,6 +13,68 @@ void main() {
       Pixer.initialize(wasmBytes: Uint8List(1)),
       throwsA(anything),
     );
+    // A valid WASM module without an ABI export must fail before any image call.
+    await expectLater(
+      Pixer.initialize(
+        wasmBytes: Uint8List.fromList([0, 97, 115, 109, 1, 0, 0, 0]),
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('no usable ABI version'),
+        ),
+      ),
+    );
+    // A minimal module exporting pixer_abi_version() => 2.
+    final name = utf8.encode('pixer_abi_version');
+    await expectLater(
+      Pixer.initialize(
+        wasmBytes: Uint8List.fromList([
+          0,
+          97,
+          115,
+          109,
+          1,
+          0,
+          0,
+          0,
+          1,
+          5,
+          1,
+          96,
+          0,
+          1,
+          127,
+          3,
+          2,
+          1,
+          0,
+          7,
+          name.length + 4,
+          1,
+          name.length,
+          ...name,
+          0,
+          0,
+          10,
+          6,
+          1,
+          4,
+          0,
+          65,
+          2,
+          11,
+        ]),
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('expected 1, got 2'),
+        ),
+      ),
+    );
     await Future.wait([
       Pixer.initialize(wasmUri: Uri.parse('pixer.wasm')),
       Pixer.initialize(wasmUri: Uri.parse('pixer.wasm')),

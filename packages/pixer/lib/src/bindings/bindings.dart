@@ -8,6 +8,14 @@
 // ignore_for_file: type=lint, unused_import
 import 'dart:ffi' as ffi;
 
+/// ABI contract version. Increment for incompatible signatures, layouts, or IDs.
+@ffi.Native<ffi.Uint32 Function()>(isLeaf: true)
+external int pixer_abi_version();
+
+/// Pixel-buffer byte length for native memory accounting; zero for a null handle.
+@ffi.Native<ffi.UintPtr Function(ffi.Pointer<ImageHandle>)>(isLeaf: true)
+external int pixer_image_byte_length(ffi.Pointer<ImageHandle> handle);
+
 /// Free a string allocated by Rust
 @ffi.Native<ffi.Void Function(ffi.Pointer<ffi.Char>)>(isLeaf: true)
 external void pixer_free_string(ffi.Pointer<ffi.Char> ptr);
@@ -295,7 +303,7 @@ external ffi.Pointer<ImageHandle> pixer_flipv(ffi.Pointer<ImageHandle> handle);
 
 /// Apply a Gaussian blur with the given standard deviation in pixels.
 ///
-/// `sigma` must be finite and `>= 0`. `sigma == 0` returns an unchanged copy.
+/// `sigma` must be zero or a positive normal f32. Zero returns an unchanged copy.
 @ffi.Native<
   ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>, ffi.Float)
 >()
@@ -304,11 +312,10 @@ external ffi.Pointer<ImageHandle> pixer_blur(
   double sigma,
 );
 
-/// Add `value` to every channel of every pixel.
+/// Add `value` to color channels, preserving alpha.
 ///
-/// Values are clamped per-channel to `[0, 255]`. Negative values darken,
-/// positive values brighten. The practical range is roughly `-255..=255`;
-/// larger magnitudes simply saturate.
+/// Values are clamped to the channel range (`[0, 255]` for 8-bit images).
+/// Negative values darken, positive values brighten; larger magnitudes saturate.
 @ffi.Native<
   ffi.Pointer<ImageHandle> Function(ffi.Pointer<ImageHandle>, ffi.Int32)
 >()
