@@ -193,7 +193,7 @@ packages:
       path: "../pixer"
       relative: true
     source: path
-    version: "0.0.9"
+    version: "0.0.10"
   pub_semver:
     dependency: transitive
     description:

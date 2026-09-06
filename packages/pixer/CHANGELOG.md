@@ -1,4 +1,4 @@
-## Unreleased
+## 0.0.10
 
 - Fixed zero blur changing pixels and rejected subnormal blur values before they can panic in Rust.
 - Preserved alpha and bit depth in grayscale conversion and prevented extreme brightness offsets from overflowing.
