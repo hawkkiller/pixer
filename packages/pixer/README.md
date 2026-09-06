@@ -6,7 +6,7 @@ Fast, cross-platform image manipulation for Dart, powered by Rust via FFI.
 
 ```yaml
 dependencies:
-  pixer: ^0.0.9
+  pixer: ^0.0.10
 ```
 
 Native binaries are downloaded automatically via Dart build hooks.
