@@ -51,6 +51,40 @@ final class Pixer {
   /// Whether the native resources have been disposed.
   bool get isDisposed => _isDisposed;
 
+  /// Guesses the image format from its file signature without decoding it.
+  ///
+  /// Supports PNG, JPEG, GIF, WebP, BMP, ICO, and TIFF on native and web.
+  /// Throws [UnsupportedFormatException] if the signature is not recognized.
+  static ImageFormatEnum guessFormat(Uint8List data) {
+    bool matches(List<int> signature, [int offset = 0]) {
+      if (data.length < offset + signature.length) return false;
+      for (var index = 0; index < signature.length; index++) {
+        if (data[offset + index] != signature[index]) return false;
+      }
+      return true;
+    }
+
+    if (matches([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
+      return ImageFormatEnum.Png;
+    }
+    if (matches([0xff, 0xd8, 0xff])) return ImageFormatEnum.Jpeg;
+    if (matches([0x47, 0x49, 0x46, 0x38]) &&
+        (matches([0x37, 0x61], 4) || matches([0x39, 0x61], 4))) {
+      return ImageFormatEnum.Gif;
+    }
+    if (matches([0x52, 0x49, 0x46, 0x46]) &&
+        matches([0x57, 0x45, 0x42, 0x50], 8)) {
+      return ImageFormatEnum.WebP;
+    }
+    if (matches([0x42, 0x4d])) return ImageFormatEnum.Bmp;
+    if (matches([0x00, 0x00, 0x01, 0x00])) return ImageFormatEnum.Ico;
+    if (matches([0x49, 0x49, 0x2a, 0x00]) ||
+        matches([0x4d, 0x4d, 0x00, 0x2a])) {
+      return ImageFormatEnum.Tiff;
+    }
+    throw UnsupportedFormatException('input: memory');
+  }
+
   /// Loads an image from a file path
   ///
   /// Throws [InvalidPathException] if the path is empty or invalid.

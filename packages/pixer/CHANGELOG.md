@@ -1,3 +1,7 @@
+## Unreleased
+
+- Added `Pixer.guessFormat` for detecting supported image formats from encoded bytes on native and web.
+
 ## 0.0.10
 
 - Fixed zero blur changing pixels and rejected subnormal blur values before they can panic in Rust.
