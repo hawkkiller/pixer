@@ -1,5 +1,5 @@
-#ifndef PIXER_H
-#define PIXER_H
+#ifndef FAST_IMAGE_H
+#define FAST_IMAGE_H
 
 #include <stdarg.h>
 #include <stdbool.h>
@@ -7,17 +7,35 @@
 #include <stdlib.h>
 
 /**
- * Filter type for resizing operations
+ * Sampling filter used when resizing.
+ *
+ * Quality and cost roughly increase from top to bottom; `Lanczos3` is the
+ * default and produces the sharpest results, `Nearest` is the fastest.
  */
 enum FilterTypeEnum
 #ifdef __cplusplus
   : uint32_t
 #endif // __cplusplus
  {
+  /**
+   * Nearest-neighbour. Fastest, blocky output. Good for pixel art.
+   */
   Nearest = 0,
+  /**
+   * Linear (a.k.a. bilinear). Cheap, slightly blurry.
+   */
   Triangle = 1,
+  /**
+   * Catmull-Rom cubic. Sharper than `Triangle`, can ring on edges.
+   */
   CatmullRom = 2,
+  /**
+   * Gaussian. Soft output, useful for downscaling without aliasing.
+   */
   Gaussian = 3,
+  /**
+   * Lanczos with `a = 3`. Highest quality, slowest. Default.
+   */
   Lanczos3 = 4,
 };
 #ifndef __cplusplus
@@ -25,21 +43,53 @@ typedef uint32_t FilterTypeEnum;
 #endif // __cplusplus
 
 /**
- * Error codes for image operations
+ * Error code returned through `out_error` pointers and as the result of
+ * operations that don't return a handle.
  */
 enum ImageErrorCode
 #ifdef __cplusplus
   : uint32_t
 #endif // __cplusplus
  {
+  /**
+   * The operation succeeded.
+   */
   Success = 0,
+  /**
+   * The provided path is empty, malformed, or refers to a non-existent file.
+   */
   InvalidPath = 1,
+  /**
+   * The image format is not recognised or not supported by this build.
+   */
   UnsupportedFormat = 2,
+  /**
+   * The image bytes are corrupt or do not match the expected format.
+   */
   DecodingError = 3,
+  /**
+   * Encoding the image to the requested format failed.
+   */
   EncodingError = 4,
+  /**
+   * An underlying I/O operation (read/write) failed.
+   */
   IoError = 5,
+  /**
+   * Width, height, or crop bounds are zero or exceed the image.
+   */
   InvalidDimensions = 6,
+  /**
+   * A handle or output pointer was null, or the image has been freed.
+   */
   InvalidPointer = 7,
+  /**
+   * A scalar parameter (e.g. JPEG quality, blur sigma) is out of range.
+   */
+  InvalidParameter = 8,
+  /**
+   * An unclassified error occurred.
+   */
   Unknown = 99,
 };
 #ifndef __cplusplus
@@ -47,19 +97,41 @@ typedef uint32_t ImageErrorCode;
 #endif // __cplusplus
 
 /**
- * Image format enum for encoding/decoding
+ * Image container format used for both decoding and encoding.
  */
 enum ImageFormatEnum
 #ifdef __cplusplus
   : uint32_t
 #endif // __cplusplus
  {
+  /**
+   * Portable Network Graphics — lossless, alpha supported.
+   */
   Png = 0,
+  /**
+   * JPEG — lossy, no alpha. Quality is configurable on encode.
+   */
   Jpeg = 1,
+  /**
+   * Graphics Interchange Format — palette-based, supports animation
+   * (single-frame only via this API).
+   */
   Gif = 2,
+  /**
+   * WebP — lossy or lossless, alpha supported.
+   */
   WebP = 3,
+  /**
+   * Windows Bitmap — uncompressed, large files.
+   */
   Bmp = 4,
+  /**
+   * Windows Icon — multi-resolution container.
+   */
   Ico = 5,
+  /**
+   * Tagged Image File Format — typically lossless.
+   */
   Tiff = 6,
 };
 #ifndef __cplusplus
@@ -67,24 +139,66 @@ typedef uint32_t ImageFormatEnum;
 #endif // __cplusplus
 
 /**
- * Opaque handle to an image
+ * Stable operation identifiers shared by the native and Dart batch APIs.
  */
+enum PixerOperationKind
+#ifdef __cplusplus
+  : uint32_t
+#endif // __cplusplus
+ {
+  Resize = 0,
+  ResizeExact = 1,
+  Crop = 2,
+  Rotate90 = 3,
+  Rotate180 = 4,
+  Rotate270 = 5,
+  FlipHorizontal = 6,
+  FlipVertical = 7,
+  Blur = 8,
+  Brightness = 9,
+  Contrast = 10,
+  Grayscale = 11,
+  Invert = 12,
+};
+#ifndef __cplusplus
+typedef uint32_t PixerOperationKind;
+#endif // __cplusplus
+
 typedef struct ImageHandle {
   uint8_t _private[0];
 } ImageHandle;
 
-/**
- * Image metadata structure
- */
 typedef struct ImageMetadata {
   uint32_t width;
   uint32_t height;
   uint8_t color_type;
 } ImageMetadata;
 
+/**
+ * One operation in a batch. Arguments are interpreted according to `kind`.
+ */
+typedef struct PixerOperation {
+  uint32_t kind;
+  int64_t arg0;
+  int64_t arg1;
+  int64_t arg2;
+  int64_t arg3;
+  double scalar;
+} PixerOperation;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
+
+/**
+ * ABI contract version. Increment for incompatible signatures, layouts, or IDs.
+ */
+uint32_t pixer_abi_version(void);
+
+/**
+ * Pixel-buffer byte length for native memory accounting; zero for a null handle.
+ */
+uintptr_t pixer_image_byte_length(const struct ImageHandle *handle);
 
 /**
  * Free a string allocated by Rust
@@ -116,8 +230,8 @@ struct ImageHandle *pixer_load_from_memory(const uint8_t *data, uintptr_t len);
  * Load an image from memory with specific format
  */
 struct ImageHandle *pixer_load_from_memory_with_format(const uint8_t *data,
-                                                            uintptr_t len,
-                                                            ImageFormatEnum format);
+                                                       uintptr_t len,
+                                                       ImageFormatEnum format);
 
 /**
  * Load an image from a file path with error code output
@@ -128,16 +242,16 @@ struct ImageHandle *pixer_load_with_error(const char *path, ImageErrorCode *out_
  * Load an image from memory buffer with error code output
  */
 struct ImageHandle *pixer_load_from_memory_with_error(const uint8_t *data,
-                                                           uintptr_t len,
-                                                           ImageErrorCode *out_error);
+                                                      uintptr_t len,
+                                                      ImageErrorCode *out_error);
 
 /**
  * Load an image from memory with specific format and error code output
  */
 struct ImageHandle *pixer_load_from_memory_with_format_and_error(const uint8_t *data,
-                                                                      uintptr_t len,
-                                                                      ImageFormatEnum format,
-                                                                      ImageErrorCode *out_error);
+                                                                 uintptr_t len,
+                                                                 ImageFormatEnum format,
+                                                                 ImageErrorCode *out_error);
 
 /**
  * Save an image to a file path
@@ -145,44 +259,93 @@ struct ImageHandle *pixer_load_from_memory_with_format_and_error(const uint8_t *
 ImageErrorCode pixer_save(const struct ImageHandle *handle, const char *path);
 
 /**
- * Write an image to a buffer in the specified format
+ * Encode an image to a buffer in the specified format.
  * Caller must free the buffer using pixer_free_buffer
  */
-ImageErrorCode pixer_write_to(const struct ImageHandle *handle,
-                                   ImageFormatEnum format,
-                                   uint8_t **out_data,
-                                   uintptr_t *out_len);
+ImageErrorCode pixer_encode(const struct ImageHandle *handle,
+                            ImageFormatEnum format,
+                            uint8_t **out_data,
+                            uintptr_t *out_len);
+
+/**
+ * Encode an image to a JPEG buffer with the specified quality.
+ *
+ * `quality` must be in `1..=100`. Use `pixer_encode` for other formats.
+ * Caller must free the buffer using `pixer_free_buffer`.
+ */
+ImageErrorCode pixer_encode_jpeg(const struct ImageHandle *handle,
+                                 uint8_t quality,
+                                 uint8_t **out_data,
+                                 uintptr_t *out_len);
 
 /**
  * Get image metadata
  */
 ImageErrorCode pixer_get_metadata(const struct ImageHandle *handle,
-                                       struct ImageMetadata *out_metadata);
+                                  struct ImageMetadata *out_metadata);
 
 /**
- * Resize an image
+ * Apply a batch and return the final image. The source image is unchanged.
+ */
+struct ImageHandle *pixer_batch_to_image(const struct ImageHandle *handle,
+                                         const struct PixerOperation *operations,
+                                         uintptr_t operation_count,
+                                         ImageErrorCode *out_error,
+                                         uintptr_t *out_failed_index);
+
+/**
+ * Apply a batch and encode the final image to a buffer.
+ * Caller must free the buffer using `pixer_free_buffer`.
+ */
+ImageErrorCode pixer_batch_encode(const struct ImageHandle *handle,
+                                  const struct PixerOperation *operations,
+                                  uintptr_t operation_count,
+                                  ImageFormatEnum format,
+                                  uint8_t jpeg_quality,
+                                  uint8_t **out_data,
+                                  uintptr_t *out_len,
+                                  uintptr_t *out_failed_index);
+
+/**
+ * Apply a batch and save the final image to a file.
+ */
+ImageErrorCode pixer_batch_save(const struct ImageHandle *handle,
+                                const struct PixerOperation *operations,
+                                uintptr_t operation_count,
+                                const char *path,
+                                uintptr_t *out_failed_index);
+
+/**
+ * Resize the image to fit *within* `width` x `height` while preserving
+ * aspect ratio.
+ *
+ * The result is at most `width` x `height`; the smaller dimension is scaled
+ * proportionally so the image is never distorted. Use `pixer_resize_exact`
+ * to force exact dimensions.
  */
 struct ImageHandle *pixer_resize(const struct ImageHandle *handle,
-                                      uint32_t width,
-                                      uint32_t height,
-                                      FilterTypeEnum filter);
+                                 uint32_t width,
+                                 uint32_t height,
+                                 FilterTypeEnum filter);
 
 /**
- * Resize an image to exact dimensions
+ * Resize the image to exactly `width` x `height`, ignoring aspect ratio.
+ *
+ * May visibly stretch or squash the image.
  */
 struct ImageHandle *pixer_resize_exact(const struct ImageHandle *handle,
-                                            uint32_t width,
-                                            uint32_t height,
-                                            FilterTypeEnum filter);
+                                       uint32_t width,
+                                       uint32_t height,
+                                       FilterTypeEnum filter);
 
 /**
  * Crop an image (immutable)
  */
 struct ImageHandle *pixer_crop_imm(const struct ImageHandle *handle,
-                                        uint32_t x,
-                                        uint32_t y,
-                                        uint32_t width,
-                                        uint32_t height);
+                                   uint32_t x,
+                                   uint32_t y,
+                                   uint32_t width,
+                                   uint32_t height);
 
 /**
  * Rotate an image 90 degrees clockwise
@@ -210,17 +373,25 @@ struct ImageHandle *pixer_fliph(const struct ImageHandle *handle);
 struct ImageHandle *pixer_flipv(const struct ImageHandle *handle);
 
 /**
- * Blur an image
+ * Apply a Gaussian blur with the given standard deviation in pixels.
+ *
+ * `sigma` must be zero or a positive normal f32. Zero returns an unchanged copy.
  */
 struct ImageHandle *pixer_blur(const struct ImageHandle *handle, float sigma);
 
 /**
- * Brighten the pixels of an image
+ * Add `value` to color channels, preserving alpha.
+ *
+ * Values are clamped to the channel range (`[0, 255]` for 8-bit images).
+ * Negative values darken, positive values brighten; larger magnitudes saturate.
  */
 struct ImageHandle *pixer_brighten(const struct ImageHandle *handle, int32_t value);
 
 /**
- * Adjust contrast
+ * Adjust contrast around the midpoint.
+ *
+ * `c == 0.0` leaves the image unchanged. Positive values increase contrast,
+ * negative values decrease it. `c` must be finite.
  */
 struct ImageHandle *pixer_adjust_contrast(const struct ImageHandle *handle, float c);
 
@@ -238,4 +409,4 @@ struct ImageHandle *pixer_invert(const struct ImageHandle *handle);
 }  // extern "C"
 #endif  // __cplusplus
 
-#endif  /* PIXER_H */
+#endif  /* FAST_IMAGE_H */

@@ -3,3 +3,6 @@
 .fvm/
 .dart_tool/
 .DS_Store
+node_modules/
+.blume/
+dist/

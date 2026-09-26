@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-05-17T12:02:41.789446",
+  "results": {
+    "resize_800x600": {
+      "pixer_us": 149562.0,
+      "dart_image_us": 3211790.5
+    },
+    "resize_1920x1080": {
+      "pixer_us": 864.3605,
+      "dart_image_us": 4940.66
+    },
+    "resize_3840x2160": {
+      "pixer_us": 903944.0,
+      "dart_image_us": 56847694.5
+    },
+    "load": {
+      "pixer_us": 59612.76470588235,
+      "dart_image_us": 633168.5
+    },
+    "encode_jpeg": {
+      "pixer_us": 201714.36363636365,
+      "dart_image_us": 1211010.0
+    },
+    "rotate_90": {
+      "pixer_us": 16463.352,
+      "dart_image_us": 305782.85714285716
+    },
+    "flip_horizontal": {
+      "pixer_us": 13892.496644295303,
+      "dart_image_us": 377647.0
+    }
+  }
+}

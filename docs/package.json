@@ -1,0 +1,16 @@
+{
+  "name": "pixer-docs",
+  "private": true,
+  "scripts": {
+    "docs:dev": "blume dev",
+    "docs:build": "blume build",
+    "docs:check": "blume check",
+    "docs:validate": "blume validate"
+  },
+  "dependencies": {
+    "blume": "1.6.1"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

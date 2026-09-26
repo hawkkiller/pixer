@@ -1,15 +1,178 @@
 import 'dart:typed_data';
+
+import 'package:image/image.dart' as img;
 import 'package:pixer/pixer.dart';
 import 'package:test/test.dart';
 
+Uint8List _transparentPng() => Uint8List.fromList([
+  0x89,
+  0x50,
+  0x4E,
+  0x47,
+  0x0D,
+  0x0A,
+  0x1A,
+  0x0A,
+  0x00,
+  0x00,
+  0x00,
+  0x0D,
+  0x49,
+  0x48,
+  0x44,
+  0x52,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x08,
+  0x06,
+  0x00,
+  0x00,
+  0x00,
+  0x1F,
+  0x15,
+  0xC4,
+  0x89,
+  0x00,
+  0x00,
+  0x00,
+  0x0A,
+  0x49,
+  0x44,
+  0x41,
+  0x54,
+  0x78,
+  0x9C,
+  0x63,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x05,
+  0x00,
+  0x01,
+  0x0D,
+  0x0A,
+  0x2D,
+  0xB4,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x49,
+  0x45,
+  0x4E,
+  0x44,
+  0xAE,
+  0x42,
+  0x60,
+  0x82,
+]);
+
 void main() {
+  setUpAll(() => Pixer.initialize(wasmUri: Uri.parse('pixer.wasm')));
   group('Pixer', () {
-    test('loads image from file throws IoException for missing files', () {
-      // For missing files, we now get specific IoException instead of generic LoadException
-      expect(
-        () => Pixer.fromFile('nonexistent.jpg'),
-        throwsA(isA<IoException>()),
+    for (final format in [img.Format.uint8, img.Format.uint16]) {
+      final maximum = format == img.Format.uint8 ? 255 : 65535;
+      final middle = format == img.Format.uint8 ? 73 : 12345;
+
+      img.Image fixture() =>
+          img.Image(width: 3, height: 1, numChannels: 4, format: format)
+            ..setPixelRgba(0, 0, 0, 0, 0, 0)
+            ..setPixelRgba(1, 0, maximum, maximum, maximum, maximum)
+            ..setPixelRgba(2, 0, middle, middle, middle, maximum ~/ 2);
+
+      List<List<num>> pixels(img.Image image) => [
+        for (final pixel in image)
+          // Grayscale+alpha PNGs may decode into two stored channels.
+          if (image.numChannels == 2)
+            [pixel[0], pixel[0], pixel[0], pixel[1]]
+          else
+            [pixel.r, pixel.g, pixel.b, pixel.a],
+      ];
+
+      test('zero blur preserves ${format.name} pixels and alpha', () {
+        final input = fixture();
+        final source = Pixer.fromMemory(img.encodePng(input));
+        addTearDown(source.dispose);
+        for (final output in [
+          source.blur(0),
+          source.batch().blur(0).toImage(),
+        ]) {
+          addTearDown(output.dispose);
+          final decoded = img.decodePng(
+            output.encode(const PixerPngEncoder()),
+          )!;
+          expect(decoded.format, format);
+          expect(pixels(decoded), pixels(input));
+        }
+        expect(
+          pixels(img.decodePng(source.encode(const PixerPngEncoder()))!),
+          pixels(input),
+        );
+      });
+
+      test('grayscale preserves ${format.name} precision and alpha', () {
+        final input = fixture();
+        final source = Pixer.fromMemory(img.encodePng(input));
+        addTearDown(source.dispose);
+        for (final output in [
+          source.grayscale(),
+          source.batch().grayscale().toImage(),
+        ]) {
+          addTearDown(output.dispose);
+          expect(output.colorType, ColorType.luminanceAlpha);
+          final decoded = img.decodePng(
+            output.encode(const PixerPngEncoder()),
+          )!;
+          expect(decoded.format, format);
+          expect(pixels(decoded), pixels(input));
+        }
+      });
+
+      test(
+        'extreme brightness saturates ${format.name} and preserves alpha',
+        () {
+          final input = fixture();
+          final source = Pixer.fromMemory(img.encodePng(input));
+          addTearDown(source.dispose);
+          for (final offset in [-0x80000000, 0x7fffffff]) {
+            for (final output in [
+              source.brightness(offset),
+              source.batch().brightness(offset).toImage(),
+            ]) {
+              addTearDown(output.dispose);
+              final decoded = img.decodePng(
+                output.encode(const PixerPngEncoder()),
+              )!;
+              expect(decoded.format, format);
+              for (var x = 0; x < input.width; x++) {
+                final pixel = decoded.getPixel(x, 0);
+                final expected = offset < 0 ? 0 : maximum;
+                expect(
+                  [pixel.r, pixel.g, pixel.b],
+                  [expected, expected, expected],
+                );
+                expect(pixel.a, input.getPixel(x, 0).a);
+              }
+            }
+          }
+        },
       );
+    }
+
+    test('rejects blur values that become subnormal or underflow in f32', () {
+      final source = Pixer.fromMemory(_transparentPng());
+      addTearDown(source.dispose);
+      for (final sigma in [1e-40, 1e-50]) {
+        expect(() => source.blur(sigma), throwsArgumentError);
+        expect(() => source.batch().blur(sigma), throwsArgumentError);
+      }
     });
 
     test('loads image from memory', () {
@@ -34,66 +197,257 @@ void main() {
 
     test('gets metadata correctly', () {
       final pngData = Uint8List.fromList([
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-        0x42, 0x60, 0x82,
+        0x89,
+        0x50,
+        0x4E,
+        0x47,
+        0x0D,
+        0x0A,
+        0x1A,
+        0x0A,
+        0x00,
+        0x00,
+        0x00,
+        0x0D,
+        0x49,
+        0x48,
+        0x44,
+        0x52,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x08,
+        0x06,
+        0x00,
+        0x00,
+        0x00,
+        0x1F,
+        0x15,
+        0xC4,
+        0x89,
+        0x00,
+        0x00,
+        0x00,
+        0x0A,
+        0x49,
+        0x44,
+        0x41,
+        0x54,
+        0x78,
+        0x9C,
+        0x63,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x05,
+        0x00,
+        0x01,
+        0x0D,
+        0x0A,
+        0x2D,
+        0xB4,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x49,
+        0x45,
+        0x4E,
+        0x44,
+        0xAE,
+        0x42,
+        0x60,
+        0x82,
       ]);
 
       final image = Pixer.fromMemory(pngData);
       final metadata = image.getMetadata();
-      
+
       expect(metadata.width, equals(1));
       expect(metadata.height, equals(1));
       expect(metadata.colorType, isA<ColorType>());
-      
+
       image.dispose();
     });
 
     test('encodes image to buffer', () {
       final pngData = Uint8List.fromList([
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-        0x42, 0x60, 0x82,
+        0x89,
+        0x50,
+        0x4E,
+        0x47,
+        0x0D,
+        0x0A,
+        0x1A,
+        0x0A,
+        0x00,
+        0x00,
+        0x00,
+        0x0D,
+        0x49,
+        0x48,
+        0x44,
+        0x52,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x08,
+        0x06,
+        0x00,
+        0x00,
+        0x00,
+        0x1F,
+        0x15,
+        0xC4,
+        0x89,
+        0x00,
+        0x00,
+        0x00,
+        0x0A,
+        0x49,
+        0x44,
+        0x41,
+        0x54,
+        0x78,
+        0x9C,
+        0x63,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x05,
+        0x00,
+        0x01,
+        0x0D,
+        0x0A,
+        0x2D,
+        0xB4,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x49,
+        0x45,
+        0x4E,
+        0x44,
+        0xAE,
+        0x42,
+        0x60,
+        0x82,
       ]);
 
       final image = Pixer.fromMemory(pngData);
-      final encoded = image.encode(ImageFormatEnum.Png);
-      
+      final encoded = image.encode(const PixerPngEncoder());
+
       expect(encoded, isA<Uint8List>());
       expect(encoded.isNotEmpty, isTrue);
-      
+
       image.dispose();
+    });
+
+    test('encodes JPEG with quality', () {
+      final image = Pixer.fromMemory(_transparentPng());
+      final encoded = image.encode(PixerJpegEncoder(quality: 90));
+
+      expect(encoded, isA<Uint8List>());
+      expect(encoded.isNotEmpty, isTrue);
+      expect(encoded.take(2), equals([0xFF, 0xD8]));
+
+      image.dispose();
+    });
+
+    test('validates JPEG quality', () {
+      expect(() => PixerJpegEncoder(quality: -1), throwsA(isA<RangeError>()));
+      expect(() => PixerJpegEncoder(quality: 0), throwsA(isA<RangeError>()));
+      expect(() => PixerJpegEncoder(quality: 101), throwsA(isA<RangeError>()));
     });
 
     test('throws when using disposed image', () {
       final pngData = Uint8List.fromList([
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-        0x42, 0x60, 0x82,
+        0x89,
+        0x50,
+        0x4E,
+        0x47,
+        0x0D,
+        0x0A,
+        0x1A,
+        0x0A,
+        0x00,
+        0x00,
+        0x00,
+        0x0D,
+        0x49,
+        0x48,
+        0x44,
+        0x52,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x08,
+        0x06,
+        0x00,
+        0x00,
+        0x00,
+        0x1F,
+        0x15,
+        0xC4,
+        0x89,
+        0x00,
+        0x00,
+        0x00,
+        0x0A,
+        0x49,
+        0x44,
+        0x41,
+        0x54,
+        0x78,
+        0x9C,
+        0x63,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x05,
+        0x00,
+        0x01,
+        0x0D,
+        0x0A,
+        0x2D,
+        0xB4,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x49,
+        0x45,
+        0x4E,
+        0x44,
+        0xAE,
+        0x42,
+        0x60,
+        0x82,
       ]);
 
       final image = Pixer.fromMemory(pngData);
       image.dispose();
       expect(image.isDisposed, isTrue);
-      
+
       expect(
         () => image.getMetadata(),
         throwsA(isA<InvalidPointerException>()),
@@ -119,8 +473,8 @@ void main() {
     });
 
     test('color type enum has all values', () {
-      expect(ColorType.l.value, equals(0));
-      expect(ColorType.la.value, equals(1));
+      expect(ColorType.luminance.value, equals(0));
+      expect(ColorType.luminanceAlpha.value, equals(1));
       expect(ColorType.rgb.value, equals(2));
       expect(ColorType.rgba.value, equals(3));
     });
@@ -128,15 +482,73 @@ void main() {
     test('crop throws on out-of-bounds rectangle', () {
       // Use 1x1 PNG image for bounds testing
       final pngData = Uint8List.fromList([
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-        0x42, 0x60, 0x82,
+        0x89,
+        0x50,
+        0x4E,
+        0x47,
+        0x0D,
+        0x0A,
+        0x1A,
+        0x0A,
+        0x00,
+        0x00,
+        0x00,
+        0x0D,
+        0x49,
+        0x48,
+        0x44,
+        0x52,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x08,
+        0x06,
+        0x00,
+        0x00,
+        0x00,
+        0x1F,
+        0x15,
+        0xC4,
+        0x89,
+        0x00,
+        0x00,
+        0x00,
+        0x0A,
+        0x49,
+        0x44,
+        0x41,
+        0x54,
+        0x78,
+        0x9C,
+        0x63,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x05,
+        0x00,
+        0x01,
+        0x0D,
+        0x0A,
+        0x2D,
+        0xB4,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x49,
+        0x45,
+        0x4E,
+        0x44,
+        0xAE,
+        0x42,
+        0x60,
+        0x82,
       ]);
 
       final image = Pixer.fromMemory(pngData);
@@ -165,26 +577,84 @@ void main() {
 
     test('invert returns a new image (original unchanged)', () {
       final pngData = Uint8List.fromList([
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-        0x42, 0x60, 0x82,
+        0x89,
+        0x50,
+        0x4E,
+        0x47,
+        0x0D,
+        0x0A,
+        0x1A,
+        0x0A,
+        0x00,
+        0x00,
+        0x00,
+        0x0D,
+        0x49,
+        0x48,
+        0x44,
+        0x52,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x08,
+        0x06,
+        0x00,
+        0x00,
+        0x00,
+        0x1F,
+        0x15,
+        0xC4,
+        0x89,
+        0x00,
+        0x00,
+        0x00,
+        0x0A,
+        0x49,
+        0x44,
+        0x41,
+        0x54,
+        0x78,
+        0x9C,
+        0x63,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x05,
+        0x00,
+        0x01,
+        0x0D,
+        0x0A,
+        0x2D,
+        0xB4,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x49,
+        0x45,
+        0x4E,
+        0x44,
+        0xAE,
+        0x42,
+        0x60,
+        0x82,
       ]);
 
       final original = Pixer.fromMemory(pngData);
-      final originalBytes = original.encode(ImageFormatEnum.Png);
+      final originalBytes = original.encode(const PixerPngEncoder());
 
       // Invert should return a NEW image
       final inverted = original.invert();
 
       // Original should still be usable and unchanged
       expect(original.isDisposed, isFalse);
-      final originalBytesAfter = original.encode(ImageFormatEnum.Png);
+      final originalBytesAfter = original.encode(const PixerPngEncoder());
       expect(originalBytesAfter, equals(originalBytes));
 
       // Inverted should be a different image
@@ -196,15 +666,73 @@ void main() {
 
     test('metadata is cached (multiple calls return same instance)', () {
       final pngData = Uint8List.fromList([
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-        0x42, 0x60, 0x82,
+        0x89,
+        0x50,
+        0x4E,
+        0x47,
+        0x0D,
+        0x0A,
+        0x1A,
+        0x0A,
+        0x00,
+        0x00,
+        0x00,
+        0x0D,
+        0x49,
+        0x48,
+        0x44,
+        0x52,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x08,
+        0x06,
+        0x00,
+        0x00,
+        0x00,
+        0x1F,
+        0x15,
+        0xC4,
+        0x89,
+        0x00,
+        0x00,
+        0x00,
+        0x0A,
+        0x49,
+        0x44,
+        0x41,
+        0x54,
+        0x78,
+        0x9C,
+        0x63,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x05,
+        0x00,
+        0x01,
+        0x0D,
+        0x0A,
+        0x2D,
+        0xB4,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x49,
+        0x45,
+        0x4E,
+        0x44,
+        0xAE,
+        0x42,
+        0x60,
+        0x82,
       ]);
 
       final image = Pixer.fromMemory(pngData);
@@ -225,15 +753,73 @@ void main() {
 
     test('blur with sigma 0 returns unchanged image', () {
       final pngData = Uint8List.fromList([
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-        0x42, 0x60, 0x82,
+        0x89,
+        0x50,
+        0x4E,
+        0x47,
+        0x0D,
+        0x0A,
+        0x1A,
+        0x0A,
+        0x00,
+        0x00,
+        0x00,
+        0x0D,
+        0x49,
+        0x48,
+        0x44,
+        0x52,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x08,
+        0x06,
+        0x00,
+        0x00,
+        0x00,
+        0x1F,
+        0x15,
+        0xC4,
+        0x89,
+        0x00,
+        0x00,
+        0x00,
+        0x0A,
+        0x49,
+        0x44,
+        0x41,
+        0x54,
+        0x78,
+        0x9C,
+        0x63,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x05,
+        0x00,
+        0x01,
+        0x0D,
+        0x0A,
+        0x2D,
+        0xB4,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x49,
+        0x45,
+        0x4E,
+        0x44,
+        0xAE,
+        0x42,
+        0x60,
+        0x82,
       ]);
 
       final image = Pixer.fromMemory(pngData);
@@ -249,23 +835,78 @@ void main() {
 
     test('blur throws on negative sigma', () {
       final pngData = Uint8List.fromList([
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-        0x42, 0x60, 0x82,
+        0x89,
+        0x50,
+        0x4E,
+        0x47,
+        0x0D,
+        0x0A,
+        0x1A,
+        0x0A,
+        0x00,
+        0x00,
+        0x00,
+        0x0D,
+        0x49,
+        0x48,
+        0x44,
+        0x52,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0x08,
+        0x06,
+        0x00,
+        0x00,
+        0x00,
+        0x1F,
+        0x15,
+        0xC4,
+        0x89,
+        0x00,
+        0x00,
+        0x00,
+        0x0A,
+        0x49,
+        0x44,
+        0x41,
+        0x54,
+        0x78,
+        0x9C,
+        0x63,
+        0x00,
+        0x01,
+        0x00,
+        0x00,
+        0x05,
+        0x00,
+        0x01,
+        0x0D,
+        0x0A,
+        0x2D,
+        0xB4,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x49,
+        0x45,
+        0x4E,
+        0x44,
+        0xAE,
+        0x42,
+        0x60,
+        0x82,
       ]);
 
       final image = Pixer.fromMemory(pngData);
 
-      expect(
-        () => image.blur(-1.0),
-        throwsA(isA<ArgumentError>()),
-      );
+      expect(() => image.blur(-1.0), throwsA(isA<ArgumentError>()));
 
       image.dispose();
     });
@@ -281,6 +922,136 @@ void main() {
         throwsA(isA<PixerException>()),
       );
     });
+
+    test('direct transformations use the shared operation core', () {
+      final image = Pixer.fromMemory(_transparentPng());
+      final results = [
+        image.resize(2, 3),
+        image.resizeExact(2, 3),
+        image.rotate90(),
+        image.rotate180(),
+        image.rotate270(),
+        image.flipHorizontal(),
+        image.flipVertical(),
+        image.blur(0),
+        image.brightness(0),
+        image.contrast(0),
+        image.grayscale(),
+        image.invert(),
+      ];
+
+      for (final result in results) {
+        expect(result.isDisposed, isFalse);
+        result.dispose();
+      }
+      image.dispose();
+    });
+
+    test('direct and batch operations share parameter validation', () {
+      final image = Pixer.fromMemory(_transparentPng());
+
+      for (final resize in [
+        () => image.resize(0x100000000, 1),
+        () => image.batch().resize(0x100000000, 1),
+      ]) {
+        expect(resize, throwsA(isA<InvalidDimensionsException>()));
+      }
+      for (final brightness in [
+        () => image.brightness(0x80000000),
+        () => image.batch().brightness(0x80000000),
+      ]) {
+        expect(brightness, throwsA(isA<RangeError>()));
+      }
+      for (final contrast in [
+        () => image.contrast(double.infinity),
+        () => image.batch().contrast(double.infinity),
+      ]) {
+        expect(contrast, throwsA(isA<ArgumentError>()));
+      }
+
+      image.dispose();
+    });
+
+    group('batch', () {
+      test('applies operations in order and leaves the source unchanged', () {
+        final image = Pixer.fromMemory(_transparentPng());
+        final result = image
+            .batch()
+            .resizeExact(4, 3)
+            .crop(1, 1, 2, 2)
+            .rotate90()
+            .toImage();
+
+        expect((result.width, result.height), (2, 2));
+        expect((image.width, image.height), (1, 1));
+
+        result.dispose();
+        image.dispose();
+      });
+
+      test('encodes the final image', () {
+        final image = Pixer.fromMemory(_transparentPng());
+        final bytes = image
+            .batch()
+            .resizeExact(2, 3)
+            .grayscale()
+            .encode(PixerJpegEncoder(quality: 85));
+
+        expect(bytes.take(2), equals([0xFF, 0xD8]));
+        final decoded = Pixer.fromMemory(bytes);
+        expect((decoded.width, decoded.height), (2, 3));
+
+        decoded.dispose();
+        image.dispose();
+      });
+
+      test('supports every transformation command', () {
+        final image = Pixer.fromMemory(_transparentPng());
+        final result = image
+            .batch()
+            .resizeExact(4, 3)
+            .resize(3, 3)
+            .rotate180()
+            .rotate270()
+            .flipHorizontal()
+            .flipVertical()
+            .blur(0)
+            .brightness(0)
+            .contrast(0)
+            .grayscale()
+            .invert()
+            .toImage();
+
+        expect((result.width, result.height), (2, 3));
+
+        result.dispose();
+        image.dispose();
+      });
+
+      test('reports the failing operation', () {
+        final image = Pixer.fromMemory(_transparentPng());
+
+        expect(
+          () => image.batch().resizeExact(2, 2).crop(1, 1, 2, 2).toImage(),
+          throwsA(
+            isA<InvalidDimensionsException>().having(
+              (error) => error.message,
+              'message',
+              contains('batch operation 2: crop'),
+            ),
+          ),
+        );
+
+        image.dispose();
+      });
+
+      test('rejects execution after the source is disposed', () {
+        final image = Pixer.fromMemory(_transparentPng());
+        final batch = image.batch().grayscale();
+        image.dispose();
+
+        expect(batch.toImage, throwsA(isA<InvalidPointerException>()));
+      });
+    });
   });
 }
-

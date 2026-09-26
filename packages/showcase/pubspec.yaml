@@ -1,0 +1,28 @@
+name: showcase
+description: A minimal cross-platform showcase for Pixer.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.10.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  pixer:
+    path: ../pixer
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/example_img.jpg
+
+hooks:
+  user_defines:
+    pixer:
+      local_build: true

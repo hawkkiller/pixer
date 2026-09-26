@@ -1,22 +1,28 @@
-import 'dart:ffi' as ffi;
 import 'dart:typed_data';
 
-import 'package:ffi/ffi.dart';
-
-import 'bindings/bindings.dart';
-import 'pixer_exception.dart';
+import 'backend_native.dart'
+    if (dart.library.js_interop) 'web/backend_web.dart';
+import 'enums.dart';
 import 'image_metadata.dart';
+import 'image_operation.dart';
+import 'pixer_encoder.dart';
+import 'pixer_exception.dart';
 
-/// A fast image processing library
-/// 
-/// This class provides methods for loading, saving, and manipulating images.
-/// Images are backed by native Rust code for high performance.
-/// 
-/// **Important:** Always call [dispose] when done with an image to free native
-/// memory. While a finalizer provides a safety net, it is not guaranteed to run
-/// (especially in isolates). For reliable memory management, always dispose
-/// explicitly.
-/// 
+part 'pixer_batch.dart';
+
+/// A loaded image, backed by Rust on native and web platforms.
+///
+/// Operations like [resize], [crop], [blur], and so on each return a new
+/// [Pixer]; the original is unchanged. Encode with [encode] or save with
+/// [saveToFile].
+///
+/// ## Memory management
+///
+/// Every [Pixer] owns a Rust image. Call [dispose] when you're done with
+/// it — including intermediates in a pipeline. Native finalizers provide a safety
+/// net but are not guaranteed to run (especially across isolates), so explicit
+/// disposal is the only reliable strategy.
+///
 /// Example:
 /// ```dart
 /// final image = Pixer.fromFile('input.jpg');
@@ -26,48 +32,57 @@ import 'image_metadata.dart';
 /// image.dispose();
 /// ```
 final class Pixer {
-  Pixer._(this._handle) : assert(_handle != ffi.nullptr) {
-    _finalizer.attach(this, _handle, detach: this);
-  }
+  static const _maxUint32 = 0xFFFFFFFF;
+  static const _minInt32 = -0x80000000;
+  static const _maxInt32 = 0x7FFFFFFF;
+  static const _maxFloat32 = 3.4028234663852886e38;
+  static const _minNormalFloat32 = 1.1754943508222875e-38;
 
-  static final Finalizer<ffi.Pointer<ImageHandle>> _finalizer =
-      Finalizer((handle) => pixer_free(handle));
-
-  final ffi.Pointer<ImageHandle> _handle;
+  Pixer._(this._backend);
+  final BackendImage _backend;
   bool _isDisposed = false;
   PixerMetadata? _cachedMetadata;
+
+  /// Loads the WASM module on web; native platforms are ready immediately.
+  /// Pass [wasmBytes] or [wasmUri], or serve pixer.wasm beside the web page.
+  static Future<void> initialize({Uint8List? wasmBytes, Uri? wasmUri}) =>
+      BackendImage.initialize(wasmBytes: wasmBytes, wasmUri: wasmUri);
 
   /// Whether the native resources have been disposed.
   bool get isDisposed => _isDisposed;
 
-  /// Guesses the image format from byte data.
+  /// Guesses the image format from its file signature without decoding it.
   ///
-  /// This is useful for detecting the format before encoding, to check
-  /// if the image is already in the desired format.
-  ///
-  /// Throws [PixerException] if the format cannot be detected.
+  /// Supports PNG, JPEG, GIF, WebP, BMP, ICO, and TIFF on native and web.
+  /// Throws [UnsupportedFormatException] if the signature is not recognized.
   static ImageFormatEnum guessFormat(Uint8List data) {
-    final dataPtr = malloc.allocate<ffi.Uint8>(data.length);
-    final outFormatPtr = malloc.allocate<ffi.Uint32>(ffi.sizeOf<ffi.Uint32>());
-
-    try {
-      dataPtr.asTypedList(data.length).setAll(0, data);
-      final errorCode = pixer_guess_format(
-        dataPtr,
-        data.length,
-        outFormatPtr,
-      );
-      final error = ImageErrorCode.fromValue(errorCode);
-      if (error != ImageErrorCode.Success) {
-        throw PixerException.fromCode(error);
+    bool matches(List<int> signature, [int offset = 0]) {
+      if (data.length < offset + signature.length) return false;
+      for (var index = 0; index < signature.length; index++) {
+        if (data[offset + index] != signature[index]) return false;
       }
-
-      final formatValue = outFormatPtr.value;
-      return ImageFormatEnum.fromValue(formatValue);
-    } finally {
-      malloc.free(dataPtr);
-      malloc.free(outFormatPtr);
+      return true;
     }
+
+    if (matches([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
+      return ImageFormatEnum.Png;
+    }
+    if (matches([0xff, 0xd8, 0xff])) return ImageFormatEnum.Jpeg;
+    if (matches([0x47, 0x49, 0x46, 0x38]) &&
+        (matches([0x37, 0x61], 4) || matches([0x39, 0x61], 4))) {
+      return ImageFormatEnum.Gif;
+    }
+    if (matches([0x52, 0x49, 0x46, 0x46]) &&
+        matches([0x57, 0x45, 0x42, 0x50], 8)) {
+      return ImageFormatEnum.WebP;
+    }
+    if (matches([0x42, 0x4d])) return ImageFormatEnum.Bmp;
+    if (matches([0x00, 0x00, 0x01, 0x00])) return ImageFormatEnum.Ico;
+    if (matches([0x49, 0x49, 0x2a, 0x00]) ||
+        matches([0x4d, 0x4d, 0x00, 0x2a])) {
+      return ImageFormatEnum.Tiff;
+    }
+    throw UnsupportedFormatException('input: memory');
   }
 
   /// Loads an image from a file path
@@ -76,23 +91,10 @@ final class Pixer {
   /// Throws [IoException] if the file cannot be read.
   /// Throws [DecodingException] if the image format cannot be decoded.
   /// Throws [UnsupportedFormatException] if the format is not supported.
+  /// Throws [UnsupportedError] on web; use [Pixer.fromMemory] instead.
   factory Pixer.fromFile(String path) {
-    if (path.trim().isEmpty) {
-      throw InvalidPathException('path is empty');
-    }
-    final pathPtr = path.toNativeUtf8();
-    final errorPtr = malloc.allocate<ffi.Uint32>(ffi.sizeOf<ffi.Uint32>());
-    try {
-      final handle = pixer_load_with_error(pathPtr.cast(), errorPtr);
-      if (handle == ffi.nullptr) {
-        final errorCode = ImageErrorCode.fromValue(errorPtr.value);
-        throw PixerException.fromCode(errorCode, context: 'path: $path');
-      }
-      return Pixer._(handle);
-    } finally {
-      malloc.free(pathPtr);
-      malloc.free(errorPtr);
-    }
+    if (path.trim().isEmpty) throw InvalidPathException('path is empty');
+    return Pixer._(BackendImage.fromFile(path));
   }
 
   /// Loads an image from a byte buffer
@@ -100,23 +102,8 @@ final class Pixer {
   /// Throws [DecodingException] if the buffer is empty or cannot be decoded.
   /// Throws [UnsupportedFormatException] if the format is not supported.
   factory Pixer.fromMemory(Uint8List data) {
-    if (data.isEmpty) {
-      throw DecodingException('input buffer is empty');
-    }
-    final dataPtr = malloc.allocate<ffi.Uint8>(data.length);
-    final errorPtr = malloc.allocate<ffi.Uint32>(ffi.sizeOf<ffi.Uint32>());
-    try {
-      dataPtr.asTypedList(data.length).setAll(0, data);
-      final handle = pixer_load_from_memory_with_error(dataPtr, data.length, errorPtr);
-      if (handle == ffi.nullptr) {
-        final errorCode = ImageErrorCode.fromValue(errorPtr.value);
-        throw PixerException.fromCode(errorCode, context: 'input: memory');
-      }
-      return Pixer._(handle);
-    } finally {
-      malloc.free(dataPtr);
-      malloc.free(errorPtr);
-    }
+    if (data.isEmpty) throw DecodingException('input buffer is empty');
+    return Pixer._(BackendImage.fromMemory(data));
   }
 
   /// Loads an image from a byte buffer with a specific format
@@ -124,28 +111,8 @@ final class Pixer {
   /// Throws [DecodingException] if the buffer is empty or cannot be decoded.
   /// Throws [UnsupportedFormatException] if the format is not supported.
   factory Pixer.fromMemoryWithFormat(Uint8List data, ImageFormatEnum format) {
-    if (data.isEmpty) {
-      throw DecodingException('input buffer is empty');
-    }
-    final dataPtr = malloc.allocate<ffi.Uint8>(data.length);
-    final errorPtr = malloc.allocate<ffi.Uint32>(ffi.sizeOf<ffi.Uint32>());
-    try {
-      dataPtr.asTypedList(data.length).setAll(0, data);
-      final handle = pixer_load_from_memory_with_format_and_error(
-        dataPtr,
-        data.length,
-        format.value,
-        errorPtr,
-      );
-      if (handle == ffi.nullptr) {
-        final errorCode = ImageErrorCode.fromValue(errorPtr.value);
-        throw PixerException.fromCode(errorCode, context: 'input: memory, format: ${format.name}');
-      }
-      return Pixer._(handle);
-    } finally {
-      malloc.free(dataPtr);
-      malloc.free(errorPtr);
-    }
+    if (data.isEmpty) throw DecodingException('input buffer is empty');
+    return Pixer._(BackendImage.fromMemory(data, format));
   }
 
   /// Checks if the image has been disposed
@@ -156,16 +123,61 @@ final class Pixer {
   }
 
   void _validateDimensions(int width, int height, {String? context}) {
-    if (width <= 0 || height <= 0) {
-      throw InvalidDimensionsException(context ?? 'width and height must be > 0');
+    if (width <= 0 ||
+        height <= 0 ||
+        width > _maxUint32 ||
+        height > _maxUint32) {
+      throw InvalidDimensionsException(
+        context ?? 'width and height must fit unsigned 32-bit values',
+      );
+    }
+  }
+
+  void _validateCoordinate(int value, String name) {
+    if (value < 0 || value > _maxUint32) {
+      throw InvalidDimensionsException(
+        '$name must fit an unsigned 32-bit value',
+      );
+    }
+  }
+
+  void _validateBlur(double sigma) {
+    if (!sigma.isFinite ||
+        sigma < 0 ||
+        sigma > _maxFloat32 ||
+        (sigma > 0 && sigma < _minNormalFloat32)) {
+      throw ArgumentError.value(
+        sigma,
+        'sigma',
+        'Must be zero or a positive normal 32-bit float',
+      );
+    }
+  }
+
+  void _validateBrightness(int value) {
+    if (value < _minInt32 || value > _maxInt32) {
+      throw RangeError.range(value, _minInt32, _maxInt32, 'value');
+    }
+  }
+
+  void _validateContrast(double contrast) {
+    if (!contrast.isFinite || contrast.abs() > _maxFloat32) {
+      throw ArgumentError.value(
+        contrast,
+        'contrast',
+        'Must be finite and fit a 32-bit float',
+      );
     }
   }
 
   void _validateCrop(int x, int y, int width, int height) {
-    if (x < 0 || y < 0) {
-      throw InvalidDimensionsException('x and y must be >= 0');
-    }
-    _validateDimensions(width, height, context: 'crop width and height must be > 0');
+    _validateCoordinate(x, 'x');
+    _validateCoordinate(y, 'y');
+    _validateDimensions(
+      width,
+      height,
+      context: 'crop width and height must be > 0',
+    );
 
     // Bounds validation
     final meta = getMetadata();
@@ -181,41 +193,13 @@ final class Pixer {
     }
   }
 
-  Pixer _fromNativeHandle(ffi.Pointer<ImageHandle> handle, String operation) {
-    if (handle == ffi.nullptr) {
-      throw UnknownException('operation: $operation');
-    }
-    return Pixer._(handle);
-  }
-
-  ImageErrorCode _errorFromValue(int value) {
-    try {
-      return ImageErrorCode.fromValue(value);
-    } on ArgumentError {
-      return ImageErrorCode.Unknown;
-    }
-  }
-
   /// Gets the image metadata (width, height, color type).
   ///
   /// The result is cached; subsequent calls return the cached value
-  /// without an FFI round-trip.
+  /// without calling the platform backend again.
   PixerMetadata getMetadata() {
     _checkDisposed();
-    if (_cachedMetadata != null) return _cachedMetadata!;
-
-    final metadataPtr = malloc.allocate<ImageMetadata>(ffi.sizeOf<ImageMetadata>());
-    try {
-      final errorCode = pixer_get_metadata(_handle, metadataPtr);
-      final error = _errorFromValue(errorCode);
-      if (error != ImageErrorCode.Success) {
-        throw PixerException.fromCode(error, context: 'operation: metadata');
-      }
-      _cachedMetadata = PixerMetadata.fromNative(metadataPtr);
-      return _cachedMetadata!;
-    } finally {
-      malloc.free(metadataPtr);
-    }
+    return _cachedMetadata ??= _backend.getMetadata();
   }
 
   /// Gets the image width
@@ -228,174 +212,232 @@ final class Pixer {
   ColorType get colorType => getMetadata().colorType;
 
   /// Saves the image to a file
-  /// 
+  ///
   /// The format is determined by the file extension.
   /// Throws [InvalidPathException] if the path is empty.
+  /// Throws [UnsupportedError] on web; use [encode] instead.
   void saveToFile(String path) {
     _checkDisposed();
-    if (path.trim().isEmpty) {
-      throw InvalidPathException('path is empty');
-    }
-    final pathPtr = path.toNativeUtf8();
-    try {
-      final errorCode = pixer_save(_handle, pathPtr.cast());
-      final error = _errorFromValue(errorCode);
-      if (error != ImageErrorCode.Success) {
-        throw PixerException.fromCode(error, context: 'path: $path');
-      }
-    } finally {
-      malloc.free(pathPtr);
-    }
+    if (path.trim().isEmpty) throw InvalidPathException('path is empty');
+    _backend.saveToFile(path);
   }
 
-  /// Encodes the image to a byte buffer in the specified format
-  Uint8List encode(ImageFormatEnum format) {
+  /// Encodes the image to a byte buffer with [encoder].
+  ///
+  /// Pass `const PixerPngEncoder()` (or any other [PixerEncoder]) for default
+  /// settings, or e.g. `PixerJpegEncoder(quality: 90)` to tune output.
+  Uint8List encode(PixerEncoder encoder) {
     _checkDisposed();
-    final outDataPtr = malloc.allocate<ffi.Pointer<ffi.Uint8>>(ffi.sizeOf<ffi.Pointer<ffi.Uint8>>());
-    final outLenPtr = malloc.allocate<ffi.UintPtr>(ffi.sizeOf<ffi.UintPtr>());
-    
-    try {
-      final errorCode = pixer_write_to(_handle, format.value, outDataPtr, outLenPtr);
-      final error = _errorFromValue(errorCode);
-      if (error != ImageErrorCode.Success) {
-        throw PixerException.fromCode(error, context: 'format: ${format.name}');
-      }
-
-      final dataPtr = outDataPtr.value;
-      final len = outLenPtr.value;
-      if (dataPtr == ffi.nullptr || len == 0) {
-        throw UnknownException('operation: encode');
-      }
-
-      final result = Uint8List.fromList(dataPtr.asTypedList(len));
-      
-      // Free the buffer allocated by Rust
-      pixer_free_buffer(dataPtr, len);
-      
-      return result;
-    } finally {
-      malloc.free(outDataPtr);
-      malloc.free(outLenPtr);
-    }
+    return _backend.encode(encoder);
   }
 
-  /// Resizes the image to the specified dimensions, maintaining aspect ratio
-  /// 
+  /// Starts a lazy batch of image operations.
+  ///
+  /// Operations are recorded in Dart and executed together when [PixerBatch.toImage],
+  /// [PixerBatch.encode], or [PixerBatch.saveToFile] is called.
+  PixerBatch batch() {
+    _checkDisposed();
+    return PixerBatch._(this);
+  }
+
+  /// Resizes the image to fit *within* [width] x [height], preserving aspect
+  /// ratio.
+  ///
+  /// The result is at most [width] x [height]; the smaller dimension is
+  /// scaled proportionally so the image is never distorted. Use
+  /// [resizeExact] to force exact dimensions.
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer resize(int width, int height, {FilterTypeEnum filter = FilterTypeEnum.Lanczos3}) {
+  Pixer resize(
+    int width,
+    int height, {
+    FilterTypeEnum filter = FilterTypeEnum.Lanczos3,
+  }) {
     _checkDisposed();
     _validateDimensions(width, height);
-    final handle = pixer_resize(_handle, width, height, filter.value);
-    return _fromNativeHandle(handle, 'resize');
+    return Pixer._(
+      _backend.transform(
+        ImageOperation(
+          PixerOperationKind.Resize,
+          'resize',
+          width,
+          height,
+          filter.value,
+        ),
+      ),
+    );
   }
 
-  /// Resizes the image to exact dimensions (may distort aspect ratio)
-  /// 
+  /// Resizes the image to exactly [width] x [height], ignoring aspect ratio.
+  ///
+  /// May visibly stretch or squash the image. See [resize] to preserve
+  /// aspect ratio.
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer resizeExact(int width, int height, {FilterTypeEnum filter = FilterTypeEnum.Lanczos3}) {
+  Pixer resizeExact(
+    int width,
+    int height, {
+    FilterTypeEnum filter = FilterTypeEnum.Lanczos3,
+  }) {
     _checkDisposed();
     _validateDimensions(width, height);
-    final handle = pixer_resize_exact(_handle, width, height, filter.value);
-    return _fromNativeHandle(handle, 'resizeExact');
+    return Pixer._(
+      _backend.transform(
+        ImageOperation(
+          PixerOperationKind.ResizeExact,
+          'resizeExact',
+          width,
+          height,
+          filter.value,
+        ),
+      ),
+    );
   }
 
   /// Crops the image to the specified rectangle
-  /// 
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer crop(int x, int y, int width, int height) {
     _checkDisposed();
     _validateCrop(x, y, width, height);
-    final handle = pixer_crop_imm(_handle, x, y, width, height);
-    return _fromNativeHandle(handle, 'crop');
+    return Pixer._(
+      _backend.transform(
+        ImageOperation(PixerOperationKind.Crop, 'crop', x, y, width, height),
+      ),
+    );
   }
 
   /// Rotates the image 90 degrees clockwise
-  /// 
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer rotate90() {
     _checkDisposed();
-    final handle = pixer_rotate90(_handle);
-    return _fromNativeHandle(handle, 'rotate90');
+    return Pixer._(
+      _backend.transform(
+        const ImageOperation(PixerOperationKind.Rotate90, 'rotate90'),
+      ),
+    );
   }
 
   /// Rotates the image 180 degrees
-  /// 
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer rotate180() {
     _checkDisposed();
-    final handle = pixer_rotate180(_handle);
-    return _fromNativeHandle(handle, 'rotate180');
+    return Pixer._(
+      _backend.transform(
+        const ImageOperation(PixerOperationKind.Rotate180, 'rotate180'),
+      ),
+    );
   }
 
   /// Rotates the image 270 degrees clockwise (90 degrees counter-clockwise)
-  /// 
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer rotate270() {
     _checkDisposed();
-    final handle = pixer_rotate270(_handle);
-    return _fromNativeHandle(handle, 'rotate270');
+    return Pixer._(
+      _backend.transform(
+        const ImageOperation(PixerOperationKind.Rotate270, 'rotate270'),
+      ),
+    );
   }
 
   /// Flips the image horizontally
-  /// 
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer flipHorizontal() {
     _checkDisposed();
-    final handle = pixer_fliph(_handle);
-    return _fromNativeHandle(handle, 'flipHorizontal');
+    return Pixer._(
+      _backend.transform(
+        const ImageOperation(
+          PixerOperationKind.FlipHorizontal,
+          'flipHorizontal',
+        ),
+      ),
+    );
   }
 
   /// Flips the image vertically
-  /// 
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer flipVertical() {
     _checkDisposed();
-    final handle = pixer_flipv(_handle);
-    return _fromNativeHandle(handle, 'flipVertical');
+    return Pixer._(
+      _backend.transform(
+        const ImageOperation(PixerOperationKind.FlipVertical, 'flipVertical'),
+      ),
+    );
   }
 
   /// Applies a Gaussian blur to the image.
   ///
   /// [sigma] controls the blur strength (higher = more blur).
   /// A value of 0 results in no change.
-  /// Throws [ArgumentError] if sigma is negative.
+  /// Throws [ArgumentError] unless sigma is zero or a positive normal 32-bit float.
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer blur(double sigma) {
     _checkDisposed();
-    if (sigma < 0) {
-      throw ArgumentError.value(sigma, 'sigma', 'Must be >= 0');
-    }
-    final handle = pixer_blur(_handle, sigma);
-    return _fromNativeHandle(handle, 'blur');
+    _validateBlur(sigma);
+    return Pixer._(
+      _backend.transform(
+        ImageOperation(PixerOperationKind.Blur, 'blur', 0, 0, 0, 0, sigma),
+      ),
+    );
   }
 
-  /// Adjusts the brightness of the image
-  /// 
-  /// [value] is added to each pixel's brightness (can be negative)
+  /// Adjusts brightness by adding [value] to color channels, preserving alpha.
+  ///
+  /// Values are clamped to the channel range (`[0, 255]` for 8-bit images).
+  /// Negative values darken, positive values brighten. For 8-bit images the
+  /// practical range is roughly `-255..=255`;
+  /// larger magnitudes simply saturate.
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer brightness(int value) {
     _checkDisposed();
-    final handle = pixer_brighten(_handle, value);
-    return _fromNativeHandle(handle, 'brightness');
+    _validateBrightness(value);
+    return Pixer._(
+      _backend.transform(
+        ImageOperation(PixerOperationKind.Brightness, 'brightness', value),
+      ),
+    );
   }
 
-  /// Adjusts the contrast of the image
-  /// 
-  /// [contrast] is the contrast factor (1.0 = no change, >1.0 = more contrast)
+  /// Adjusts contrast around the midpoint.
+  ///
+  /// [contrast] of `0.0` leaves the image unchanged. Positive values increase
+  /// contrast, negative values decrease it. Must be finite.
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer contrast(double contrast) {
     _checkDisposed();
-    final handle = pixer_adjust_contrast(_handle, contrast);
-    return _fromNativeHandle(handle, 'contrast');
+    _validateContrast(contrast);
+    return Pixer._(
+      _backend.transform(
+        ImageOperation(
+          PixerOperationKind.Contrast,
+          'contrast',
+          0,
+          0,
+          0,
+          0,
+          contrast,
+        ),
+      ),
+    );
   }
 
   /// Converts the image to grayscale
-  /// 
+  ///
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer grayscale() {
     _checkDisposed();
-    final handle = pixer_grayscale(_handle);
-    return _fromNativeHandle(handle, 'grayscale');
+    return Pixer._(
+      _backend.transform(
+        const ImageOperation(PixerOperationKind.Grayscale, 'grayscale'),
+      ),
+    );
   }
 
   /// Inverts the colors of the image.
@@ -403,19 +445,20 @@ final class Pixer {
   /// Returns a new [Pixer] instance. The original is not modified.
   Pixer invert() {
     _checkDisposed();
-    final handle = pixer_invert(_handle);
-    return _fromNativeHandle(handle, 'invert');
+    return Pixer._(
+      _backend.transform(
+        const ImageOperation(PixerOperationKind.Invert, 'invert'),
+      ),
+    );
   }
 
   /// Disposes the native resources
-  /// 
+  ///
   /// Call this when the image is no longer needed to prevent memory leaks.
-  /// A finalizer provides a fallback, but explicit disposal is recommended.
+  /// Native finalizers provide a fallback. Web requires explicit disposal.
   void dispose() {
-    if (!_isDisposed) {
-      _finalizer.detach(this);
-      pixer_free(_handle);
-      _isDisposed = true;
-    }
+    if (_isDisposed) return;
+    _backend.dispose();
+    _isDisposed = true;
   }
 }

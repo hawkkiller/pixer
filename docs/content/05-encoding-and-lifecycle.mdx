@@ -1,0 +1,49 @@
+---
+title: Encoding and lifecycle
+description: Encode images, read metadata, handle errors, and release resources.
+---
+
+## Encode output
+
+```dart
+final png = image.encode(const PixerPngEncoder());
+final jpeg = image.encode(PixerJpegEncoder(quality: 90));
+final webp = image.encode(const PixerWebPEncoder());
+```
+
+Pixer also provides GIF, BMP, ICO, and TIFF encoders. JPEG quality accepts
+values from 1 through 100 and defaults to 75.
+
+## Read metadata
+
+```dart
+final metadata = image.getMetadata();
+print('${metadata.width}x${metadata.height}, ${metadata.colorType}');
+
+// Convenience getters use the same cached metadata.
+print('${image.width}x${image.height}');
+```
+
+## Release resources
+
+Every `Pixer` owns a Rust image handle. Always call `dispose()` when finished,
+including for images returned by direct operations.
+
+Native finalizers are a safety net, but they are not guaranteed to run. Web
+builds require explicit disposal.
+
+## Handle errors
+
+Pixer throws typed exceptions:
+
+| Exception | Cause |
+| --- | --- |
+| `InvalidPathException` | Empty or invalid file path |
+| `IoException` | File read or write failure |
+| `DecodingException` | Image bytes cannot be decoded |
+| `EncodingException` | Image cannot be encoded |
+| `UnsupportedFormatException` | Image format is unsupported |
+| `InvalidDimensionsException` | Invalid dimensions or crop bounds |
+| `InvalidPointerException` | Image was already disposed |
+| `InvalidParameterException` | A scalar parameter is out of range |
+| `UnknownException` | Unclassified native failure |

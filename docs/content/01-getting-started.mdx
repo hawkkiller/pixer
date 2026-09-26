@@ -1,0 +1,62 @@
+---
+title: Getting started
+description: Install Pixer and process an image with the Dart API.
+---
+
+## Install Pixer
+
+```yaml title="pubspec.yaml"
+dependencies:
+  pixer: ^0.0.10
+```
+
+Run your package manager as usual:
+
+```bash
+dart pub get
+```
+
+Pixer's build hook downloads the matching native binary for the current
+platform. The package and binary ABI versions must match.
+
+## Load an image
+
+Load from a path on native platforms:
+
+```dart
+final image = Pixer.fromFile('photo.jpg');
+```
+
+Or load bytes on every platform, including the web:
+
+```dart
+final bytes = await File('photo.png').readAsBytes();
+final image = Pixer.fromMemory(bytes);
+```
+
+Pixer auto-detects the format. Use `fromMemoryWithFormat` only when the format
+must be supplied explicitly.
+
+## Transform and encode
+
+```dart
+final image = Pixer.fromFile('photo.jpg');
+try {
+  final thumbnail = image.resize(640, 640);
+  try {
+    final bytes = thumbnail.encode(PixerJpegEncoder(quality: 85));
+    await File('thumbnail.jpg').writeAsBytes(bytes);
+  } finally {
+    thumbnail.dispose();
+  }
+} finally {
+  image.dispose();
+}
+```
+
+`resize` preserves aspect ratio and fits the image within the requested bounds.
+Use `resizeExact` when the output must have those exact dimensions.
+
+## Supported formats
+
+Pixer decodes and encodes PNG, JPEG, GIF, WebP, BMP, ICO, and TIFF.

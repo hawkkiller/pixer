@@ -20,8 +20,8 @@ echo "Header generated: $HEADER_FILE"
 
 echo "Generating Dart FFI bindings..."
 
-# Run ffigen from the package directory
+# Run ffigen via the Dart API from the package directory
 cd "$PACKAGE_DIR"
-dart run ffigen --config ffigen.yaml
+dart run tool/generate_bindings.dart
 
 echo "Done! Bindings generated successfully."
