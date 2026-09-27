@@ -1,3 +1,7 @@
+## Unreleased
+
+- Added `Pixer.probe` to inspect PNG, JPEG, GIF, and WebP format, dimensions, and frame count without decoding pixels.
+
 ## 0.0.10
 
 - Fixed zero blur changing pixels and rejected subnormal blur values before they can panic in Rust.
