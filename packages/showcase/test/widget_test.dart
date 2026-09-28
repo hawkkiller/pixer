@@ -1,14 +1,13 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:showcase/main.dart';
 
 void main() {
-  testWidgets('shows and runs the Pixer operations', (tester) async {
+  testWidgets('shows the comparison controls', (tester) async {
     await tester.pumpWidget(const PixerShowcase());
-    await tester.pumpAndSettle();
 
-    expect(find.text('Pixer'), findsOneWidget);
-    expect(find.byType(ChoiceChip), findsNWidgets(14));
-    expect(find.text('Result'), findsOneWidget);
+    expect(find.text('FULL HD  →  4K'), findsOneWidget);
+    expect(find.text('Dart image'), findsOneWidget);
+    expect(find.text('Pixer · Rust'), findsOneWidget);
+    expect(find.text('RUN COMPARISON'), findsOneWidget);
   });
 }
