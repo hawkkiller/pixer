@@ -6,7 +6,7 @@ Fast, cross-platform image manipulation for Dart, powered by Rust via FFI.
 
 ```yaml
 dependencies:
-  pixer: ^0.0.10
+  pixer: ^0.0.11
 ```
 
 Native binaries are downloaded automatically via Dart build hooks.
@@ -33,9 +33,8 @@ development of this repository, build the module with:
 dart packages/pixer/tool/build_wasm.dart web/pixer.wasm
 ```
 
-Browser builds support the byte-based API. `fromFile`, `saveToFile`, and the
-batch `saveToFile` terminal throw `UnsupportedError`; use `fromMemory` and
-`encode` instead. The web implementation is compatible with both `dart2js`
+Browser builds support the byte-based API. `fromFile` and `saveToFile` throw
+`UnsupportedError`; use `fromMemory` and `encode` instead. The web implementation is compatible with both `dart2js`
 and Dart/Flutter Wasm builds.
 
 ## Quick Start
@@ -44,9 +43,7 @@ and Dart/Flutter Wasm builds.
 import 'package:pixer/pixer.dart';
 
 final image = Pixer.fromFile('input.jpg');
-final result = image.resize(800, 600);
-result.saveToFile('output.png');
-result.dispose();
+image.resize(800, 600).grayscale().saveToFile('output.png');
 image.dispose();
 ```
 
@@ -61,45 +58,75 @@ final bytes = await File('photo.png').readAsBytes();
 final image = Pixer.fromMemory(bytes);
 
 // From memory with explicit format
-final image = Pixer.fromMemoryWithFormat(bytes, ImageFormatEnum.Png);
+final image = Pixer.fromMemory(bytes, format: ImageFormatEnum.Png);
 ```
 
 ## Supported Formats
 
 PNG, JPEG, GIF, WebP, BMP, ICO, TIFF
 
-## Image Operations
+## Pipelines
 
-All direct operations return a **new** `Pixer` instance; the original is unchanged.
+Operations on a `Pixer` return a lazy `PixerPipeline`. Chain as many
+operations as you need, then finish with a terminal:
+
+```dart
+final bytes = image
+    .resize(800, 600)
+    .grayscale()
+    .encode(PixerJpegEncoder(quality: 85)); // bytes
+
+image.crop(10, 10, 200, 200).rotate90().saveToFile('crop.png'); // file
+
+final thumb = image.resize(320, 240).toImage(); // new Pixer
+thumb.dispose();
+```
+
+The whole chain runs in a single native call, intermediates stay inside Rust,
+and the source `Pixer` is never modified, so one decoded image can feed many
+pipelines. Pipelines are immutable and safe to branch:
+
+```dart
+final base = image.resize(800, 600);
+final gray = base.grayscale().encode(const PixerPngEncoder());
+final blurred = base.blur(2).encode(const PixerPngEncoder()); // no grayscale
+```
+
+Arguments are validated as each operation is added. Checks that depend on the
+image, such as crop bounds, run against the preceding operation's output when
+the terminal is called.
+
+## Image Operations
 
 ```dart
 // Resize to fit within 800x600, preserving aspect ratio
-final resized = image.resize(800, 600);
+image.resize(800, 600);
 
 // Resize to exactly 800x600 (may distort)
-final stretched = image.resizeExact(800, 600);
+image.resizeExact(800, 600);
 
 // Crop (x, y, width, height)
-final cropped = image.crop(100, 100, 400, 300);
+image.crop(100, 100, 400, 300);
 
 // Rotate
-final r90 = image.rotate90();
-final r180 = image.rotate180();
-final r270 = image.rotate270();
+image.rotate90();
+image.rotate180();
+image.rotate270();
 
 // Flip
-final hFlip = image.flipHorizontal();
-final vFlip = image.flipVertical();
+image.flipHorizontal();
+image.flipVertical();
 
 // Adjustments
-final blurred = image.blur(2.5);       // Gaussian blur, sigma in pixels
-final bright = image.brightness(30);   // Add to each channel; clamps to [0, 255]
-final punchier = image.contrast(20);   // 0 = unchanged, positive boosts, negative flattens
-final gray = image.grayscale();       // Preserves alpha and bit depth
-final inverted = image.invert();
+image.blur(2.5);       // Gaussian blur, sigma in pixels
+image.brightness(30);  // Add to each channel; clamps to [0, 255]
+image.contrast(20);    // 0 = unchanged, positive boosts, negative flattens
+image.grayscale();     // Preserves alpha and bit depth
+image.invert();
 ```
 
-`blur(0)` returns an unchanged copy. Positive blur values must fit a normal
+Every operation is also available on `PixerPipeline`, so they chain freely.
+`blur(0)` leaves the image unchanged. Positive blur values must fit a normal
 32-bit float; subnormal values are rejected with `ArgumentError`.
 
 ### Resize Filters
@@ -112,29 +139,9 @@ image.resize(800, 600, filter: FilterTypeEnum.CatmullRom);
 image.resize(800, 600, filter: FilterTypeEnum.Gaussian);
 ```
 
-## Batch Processing
-
-Use `batch()` to execute multiple operations in one native call without creating
-Dart-visible intermediate images. Operations are lazy until a terminal method
-is called.
-
-```dart
-final bytes = image
-    .batch()
-    .resize(800, 600)
-    .grayscale()
-    .encode(PixerJpegEncoder(quality: 85));
-
-final result = image.batch().crop(10, 10, 200, 200).rotate90().toImage();
-result.dispose();
-
-image.batch().resize(320, 240).saveToFile('thumbnail.png');
-```
-
-The original `Pixer` is unchanged. Crop bounds and other sequence-dependent
-validation are evaluated against the output of preceding operations.
-
 ## Saving & Encoding
+
+`Pixer` and `PixerPipeline` share the same terminals.
 
 ```dart
 // Save to file (format from extension)
@@ -160,22 +167,15 @@ print('${image.width}x${image.height}');
 
 ## Resource Management
 
-Every `Pixer` owns a Rust handle. Call `dispose()` when done — including intermediates in a pipeline.
+Every `Pixer` owns a Rust handle: the one you load and every `toImage()` result.
+Call `dispose()` when done. Pipelines own no native memory and need no disposal.
 Native builds assign a finalizer that frees the handle when the object is garbage collected,
 but finalizers are not guaranteed to run. Web builds require explicit disposal.
-
-Batch operations keep their intermediates inside Rust. Only a `toImage()` result
-owns a new native handle that must be disposed.
 
 ```dart
 final image = Pixer.fromFile('input.jpg');
 try {
-  final resized = image.resize(800, 600);
-  try {
-    resized.saveToFile('out.jpg');
-  } finally {
-    resized.dispose();
-  }
+  image.resize(800, 600).saveToFile('out.jpg');
 } finally {
   image.dispose();
 }
@@ -210,7 +210,7 @@ Linux, macOS, Windows, Android, iOS, Web (WebAssembly)
 - [x] Adjustments: blur, brightness, contrast, grayscale, invert
 - [x] Metadata access (width, height, color type)
 - [x] Encoder objects with JPEG quality support
-- [x] Lazy batch processing with image, byte, and file outputs
+- [x] Lazy pipelines with image, byte, and file outputs
 - [x] Full platform support (Linux, macOS, Windows, Android, iOS)
 - [x] Web support through the Rust WebAssembly build
 

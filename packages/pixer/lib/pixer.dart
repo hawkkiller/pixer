@@ -1,13 +1,12 @@
 /// Fast image processing for Dart, backed by Rust.
 ///
-/// Start with [Pixer] to load an image, apply operations, and either save or
-/// encode the result. Use [Pixer.batch] to execute multiple operations in one
-/// native call. Errors throw subclasses of [PixerException].
+/// Start with [Pixer] to load an image. Operations build a lazy
+/// [PixerPipeline] that runs in one native call when you encode, save, or
+/// materialize the result. Errors throw subclasses of [PixerException].
 ///
 /// ```dart
 /// final image = Pixer.fromFile('input.jpg');
 /// final bytes = image
-///     .batch()
 ///     .resize(800, 600)
 ///     .grayscale()
 ///     .encode(PixerJpegEncoder(quality: 85));
@@ -16,7 +15,7 @@
 library;
 
 export 'src/pixer_base.dart';
-export 'src/pixer_exception.dart';
-export 'src/enums.dart' show FilterTypeEnum, ImageFormatEnum;
+export 'src/pixer_exception.dart' hide checkBatchError, checkImageError;
+export 'src/enums.dart' show FilterTypeEnum, ImageErrorCode, ImageFormatEnum;
 export 'src/image_metadata.dart';
 export 'src/pixer_encoder.dart';

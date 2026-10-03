@@ -100,17 +100,11 @@ void main() {
         final input = fixture();
         final source = Pixer.fromMemory(img.encodePng(input));
         addTearDown(source.dispose);
-        for (final output in [
-          source.blur(0),
-          source.batch().blur(0).toImage(),
-        ]) {
-          addTearDown(output.dispose);
-          final decoded = img.decodePng(
-            output.encode(const PixerPngEncoder()),
-          )!;
-          expect(decoded.format, format);
-          expect(pixels(decoded), pixels(input));
-        }
+        final decoded = img.decodePng(
+          source.blur(0).encode(const PixerPngEncoder()),
+        )!;
+        expect(decoded.format, format);
+        expect(pixels(decoded), pixels(input));
         expect(
           pixels(img.decodePng(source.encode(const PixerPngEncoder()))!),
           pixels(input),
@@ -121,18 +115,12 @@ void main() {
         final input = fixture();
         final source = Pixer.fromMemory(img.encodePng(input));
         addTearDown(source.dispose);
-        for (final output in [
-          source.grayscale(),
-          source.batch().grayscale().toImage(),
-        ]) {
-          addTearDown(output.dispose);
-          expect(output.colorType, ColorType.luminanceAlpha);
-          final decoded = img.decodePng(
-            output.encode(const PixerPngEncoder()),
-          )!;
-          expect(decoded.format, format);
-          expect(pixels(decoded), pixels(input));
-        }
+        final output = source.grayscale().toImage();
+        addTearDown(output.dispose);
+        expect(output.colorType, ColorType.luminanceAlpha);
+        final decoded = img.decodePng(output.encode(const PixerPngEncoder()))!;
+        expect(decoded.format, format);
+        expect(pixels(decoded), pixels(input));
       });
 
       test(
@@ -142,24 +130,18 @@ void main() {
           final source = Pixer.fromMemory(img.encodePng(input));
           addTearDown(source.dispose);
           for (final offset in [-0x80000000, 0x7fffffff]) {
-            for (final output in [
-              source.brightness(offset),
-              source.batch().brightness(offset).toImage(),
-            ]) {
-              addTearDown(output.dispose);
-              final decoded = img.decodePng(
-                output.encode(const PixerPngEncoder()),
-              )!;
-              expect(decoded.format, format);
-              for (var x = 0; x < input.width; x++) {
-                final pixel = decoded.getPixel(x, 0);
-                final expected = offset < 0 ? 0 : maximum;
-                expect(
-                  [pixel.r, pixel.g, pixel.b],
-                  [expected, expected, expected],
-                );
-                expect(pixel.a, input.getPixel(x, 0).a);
-              }
+            final decoded = img.decodePng(
+              source.brightness(offset).encode(const PixerPngEncoder()),
+            )!;
+            expect(decoded.format, format);
+            for (var x = 0; x < input.width; x++) {
+              final pixel = decoded.getPixel(x, 0);
+              final expected = offset < 0 ? 0 : maximum;
+              expect(
+                [pixel.r, pixel.g, pixel.b],
+                [expected, expected, expected],
+              );
+              expect(pixel.a, input.getPixel(x, 0).a);
             }
           }
         },
@@ -171,7 +153,6 @@ void main() {
       addTearDown(source.dispose);
       for (final sigma in [1e-40, 1e-50]) {
         expect(() => source.blur(sigma), throwsArgumentError);
-        expect(() => source.batch().blur(sigma), throwsArgumentError);
       }
     });
 
@@ -193,6 +174,14 @@ void main() {
       expect(image.width, equals(1));
       expect(image.height, equals(1));
       image.dispose();
+
+      final explicit = Pixer.fromMemory(pngData, format: ImageFormatEnum.Png);
+      expect(explicit.width, equals(1));
+      explicit.dispose();
+      expect(
+        () => Pixer.fromMemory(pngData, format: ImageFormatEnum.Jpeg),
+        throwsA(isA<PixerException>()),
+      );
     });
 
     test('gets metadata correctly', () {
@@ -556,19 +545,19 @@ void main() {
       // Image is 1x1, so any crop requesting more than 1 pixel should fail
       // Crop that exceeds width
       expect(
-        () => image.crop(0, 0, 2, 1), // width=2 but image is only 1 wide
+        () => image.crop(0, 0, 2, 1).toImage(), // width=2 but image is 1 wide
         throwsA(isA<InvalidDimensionsException>()),
       );
 
       // Crop that exceeds height
       expect(
-        () => image.crop(0, 0, 1, 2), // height=2 but image is only 1 tall
+        () => image.crop(0, 0, 1, 2).toImage(), // height=2 but image is 1 tall
         throwsA(isA<InvalidDimensionsException>()),
       );
 
       // Crop that starts out of bounds
       expect(
-        () => image.crop(1, 0, 1, 1), // x=1 puts us outside the 1x1 image
+        () => image.crop(1, 0, 1, 1).toImage(), // x=1 is outside the 1x1 image
         throwsA(isA<InvalidDimensionsException>()),
       );
 
@@ -650,7 +639,7 @@ void main() {
       final originalBytes = original.encode(const PixerPngEncoder());
 
       // Invert should return a NEW image
-      final inverted = original.invert();
+      final inverted = original.invert().toImage();
 
       // Original should still be usable and unchanged
       expect(original.isDisposed, isFalse);
@@ -825,7 +814,7 @@ void main() {
       final image = Pixer.fromMemory(pngData);
 
       // blur(0) should work without error
-      final blurred = image.blur(0);
+      final blurred = image.blur(0).toImage();
       expect(blurred.width, equals(image.width));
       expect(blurred.height, equals(image.height));
 
@@ -923,60 +912,26 @@ void main() {
       );
     });
 
-    test('direct transformations use the shared operation core', () {
-      final image = Pixer.fromMemory(_transparentPng());
-      final results = [
-        image.resize(2, 3),
-        image.resizeExact(2, 3),
-        image.rotate90(),
-        image.rotate180(),
-        image.rotate270(),
-        image.flipHorizontal(),
-        image.flipVertical(),
-        image.blur(0),
-        image.brightness(0),
-        image.contrast(0),
-        image.grayscale(),
-        image.invert(),
-      ];
-
-      for (final result in results) {
-        expect(result.isDisposed, isFalse);
-        result.dispose();
-      }
-      image.dispose();
-    });
-
-    test('direct and batch operations share parameter validation', () {
+    test('validates arguments when operations are added', () {
       final image = Pixer.fromMemory(_transparentPng());
 
-      for (final resize in [
+      expect(
         () => image.resize(0x100000000, 1),
-        () => image.batch().resize(0x100000000, 1),
-      ]) {
-        expect(resize, throwsA(isA<InvalidDimensionsException>()));
-      }
-      for (final brightness in [
-        () => image.brightness(0x80000000),
-        () => image.batch().brightness(0x80000000),
-      ]) {
-        expect(brightness, throwsA(isA<RangeError>()));
-      }
-      for (final contrast in [
+        throwsA(isA<InvalidDimensionsException>()),
+      );
+      expect(() => image.brightness(0x80000000), throwsA(isA<RangeError>()));
+      expect(
         () => image.contrast(double.infinity),
-        () => image.batch().contrast(double.infinity),
-      ]) {
-        expect(contrast, throwsA(isA<ArgumentError>()));
-      }
+        throwsA(isA<ArgumentError>()),
+      );
 
       image.dispose();
     });
 
-    group('batch', () {
+    group('pipeline', () {
       test('applies operations in order and leaves the source unchanged', () {
         final image = Pixer.fromMemory(_transparentPng());
         final result = image
-            .batch()
             .resizeExact(4, 3)
             .crop(1, 1, 2, 2)
             .rotate90()
@@ -989,10 +944,23 @@ void main() {
         image.dispose();
       });
 
+      test('branches do not share operations', () {
+        final image = Pixer.fromMemory(_transparentPng());
+        final base = image.resizeExact(4, 2);
+        final rotated = base.rotate90().toImage();
+        final plain = base.toImage();
+
+        expect((rotated.width, rotated.height), (2, 4));
+        expect((plain.width, plain.height), (4, 2));
+
+        plain.dispose();
+        rotated.dispose();
+        image.dispose();
+      });
+
       test('encodes the final image', () {
         final image = Pixer.fromMemory(_transparentPng());
         final bytes = image
-            .batch()
             .resizeExact(2, 3)
             .grayscale()
             .encode(PixerJpegEncoder(quality: 85));
@@ -1008,7 +976,6 @@ void main() {
       test('supports every transformation command', () {
         final image = Pixer.fromMemory(_transparentPng());
         final result = image
-            .batch()
             .resizeExact(4, 3)
             .resize(3, 3)
             .rotate180()
@@ -1032,12 +999,12 @@ void main() {
         final image = Pixer.fromMemory(_transparentPng());
 
         expect(
-          () => image.batch().resizeExact(2, 2).crop(1, 1, 2, 2).toImage(),
+          () => image.resizeExact(2, 2).crop(1, 1, 2, 2).toImage(),
           throwsA(
             isA<InvalidDimensionsException>().having(
               (error) => error.message,
               'message',
-              contains('batch operation 2: crop'),
+              contains('pipeline operation 2: crop'),
             ),
           ),
         );
@@ -1047,10 +1014,11 @@ void main() {
 
       test('rejects execution after the source is disposed', () {
         final image = Pixer.fromMemory(_transparentPng());
-        final batch = image.batch().grayscale();
+        final pipeline = image.grayscale();
         image.dispose();
 
-        expect(batch.toImage, throwsA(isA<InvalidPointerException>()));
+        expect(pipeline.toImage, throwsA(isA<InvalidPointerException>()));
+        expect(image.grayscale, throwsA(isA<InvalidPointerException>()));
       });
     });
   });

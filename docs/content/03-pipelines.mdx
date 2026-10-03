@@ -1,0 +1,62 @@
+---
+title: Pipelines
+description: Chain image operations and run them in one native or WebAssembly call.
+---
+
+Every operation on a `Pixer` returns a lazy `PixerPipeline`. Chain operations,
+then finish with a terminal: `encode`, `saveToFile`, or `toImage`. The whole
+chain runs in a single call, and intermediate images stay inside Rust.
+
+## Encode
+
+```dart
+final bytes = image
+    .resize(800, 600)
+    .grayscale()
+    .encode(PixerJpegEncoder(quality: 85));
+```
+
+## Save
+
+```dart
+image.resize(320, 240).saveToFile('thumbnail.png');
+```
+
+## Return an image
+
+```dart
+final result = image.crop(10, 10, 200, 200).rotate90().toImage();
+
+try {
+  print('${result.width}x${result.height}');
+} finally {
+  result.dispose();
+}
+```
+
+`toImage` returns a new `Pixer` that you must dispose. Pipelines themselves own
+no native memory.
+
+## Reuse and branch
+
+The source `Pixer` is never modified, so one decoded image can feed many
+pipelines. Pipelines are immutable, so branching from a shared prefix is safe:
+
+```dart
+final base = image.resize(800, 600);
+final gray = base.grayscale().encode(const PixerPngEncoder());
+final soft = base.blur(2).encode(const PixerPngEncoder()); // no grayscale
+```
+
+Each terminal runs the pipeline from the source again.
+
+## Validation
+
+Arguments are validated as each operation is added. Checks that depend on the
+image, such as crop bounds after a resize, run against the preceding
+operation's output when the terminal is called.
+
+:::warning
+`saveToFile` is unavailable in browser builds. Use `encode` and handle the
+returned bytes instead.
+:::

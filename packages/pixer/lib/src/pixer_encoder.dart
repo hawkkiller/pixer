@@ -1,6 +1,6 @@
 import 'enums.dart';
 
-/// Output configuration passed to Pixer.encode or PixerBatch.encode.
+/// Output configuration passed to Pixer.encode or PixerPipeline.encode.
 sealed class PixerEncoder {
   const PixerEncoder();
 

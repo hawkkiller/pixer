@@ -1,5 +1,5 @@
 /// Must match pixer_abi_version in the Rust engine.
-const pixerAbiVersion = 1;
+const pixerAbiVersion = 2;
 
 void checkPixerAbi(int actual) {
   if (actual != pixerAbiVersion) {

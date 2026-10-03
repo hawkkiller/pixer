@@ -18,14 +18,14 @@ void main() {
 
   test('saves the final image to a file', () async {
     final directory = await Directory.systemTemp.createTemp(
-      'pixer_batch_test_',
+      'pixer_pipeline_test_',
     );
     final output = File('${directory.path}/output.png');
     final image = Pixer.fromMemory(
       img.encodePng(img.Image(width: 1, height: 1, numChannels: 4)),
     );
     try {
-      image.batch().resizeExact(3, 2).invert().saveToFile(output.path);
+      image.resizeExact(3, 2).invert().saveToFile(output.path);
 
       final saved = Pixer.fromFile(output.path);
       expect((saved.width, saved.height), (3, 2));

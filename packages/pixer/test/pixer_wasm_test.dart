@@ -26,7 +26,7 @@ void main() {
         ),
       ),
     );
-    // A minimal module exporting pixer_abi_version() => 2.
+    // A minimal module exporting pixer_abi_version() => 3.
     final name = utf8.encode('pixer_abi_version');
     await expectLater(
       Pixer.initialize(
@@ -63,7 +63,7 @@ void main() {
           4,
           0,
           65,
-          2,
+          3,
           11,
         ]),
       ),
@@ -71,7 +71,7 @@ void main() {
         isA<StateError>().having(
           (error) => error.message,
           'message',
-          contains('expected 1, got 2'),
+          contains('expected 2, got 3'),
         ),
       ),
     );
@@ -87,40 +87,39 @@ void main() {
     ),
   );
 
-  test('loads, transforms, batches, and encodes through WebAssembly', () {
+  test('loads, transforms, and encodes through WebAssembly', () {
     final source = load();
-    final resized = source.resizeExact(4, 2);
-    final transformed = resized.rotate90();
-    final batched = source.batch().resizeExact(4, 2).rotate90().toImage();
-    final encoded = batched.encode(const PixerPngEncoder());
+    final transformed = source.resizeExact(4, 2).rotate90().toImage();
+    final encoded = source
+        .resizeExact(4, 2)
+        .rotate90()
+        .encode(const PixerPngEncoder());
     final decoded = Pixer.fromMemory(encoded);
 
     expect((transformed.width, transformed.height), (2, 4));
     expect((decoded.width, decoded.height), (2, 4));
 
     decoded.dispose();
-    batched.dispose();
     transformed.dispose();
-    resized.dispose();
     source.dispose();
   });
 
-  test('supports every direct operation and encoder', () {
+  test('supports every operation and encoder', () {
     final source = load();
     final images = <Pixer>[
-      source.resize(1, 1),
-      source.resizeExact(2, 2),
-      source.crop(0, 0, 1, 1),
-      source.rotate90(),
-      source.rotate180(),
-      source.rotate270(),
-      source.flipHorizontal(),
-      source.flipVertical(),
-      source.blur(0),
-      source.brightness(1),
-      source.contrast(1),
-      source.grayscale(),
-      source.invert(),
+      source.resize(1, 1).toImage(),
+      source.resizeExact(2, 2).toImage(),
+      source.crop(0, 0, 1, 1).toImage(),
+      source.rotate90().toImage(),
+      source.rotate180().toImage(),
+      source.rotate270().toImage(),
+      source.flipHorizontal().toImage(),
+      source.flipVertical().toImage(),
+      source.blur(0).toImage(),
+      source.brightness(1).toImage(),
+      source.contrast(1).toImage(),
+      source.grayscale().toImage(),
+      source.invert().toImage(),
     ];
     final encoders = <PixerEncoder>[
       const PixerPngEncoder(),
@@ -142,20 +141,17 @@ void main() {
     expect(() => source.getMetadata(), throwsA(isA<InvalidPointerException>()));
   });
 
-  test('handles empty, signed, and failing batches', () {
+  test('handles signed and failing pipelines', () {
     final source = load();
-    final empty = source.batch().toImage();
-    final darkened = source.batch().brightness(-1).toImage();
+    final darkened = source.brightness(-1).toImage();
 
-    expect((empty.width, empty.height), (1, 1));
     expect((darkened.width, darkened.height), (1, 1));
     expect(
-      () => source.batch().crop(0, 0, 2, 2).toImage(),
+      () => source.crop(0, 0, 2, 2).toImage(),
       throwsA(isA<InvalidDimensionsException>()),
     );
 
     darkened.dispose();
-    empty.dispose();
     source.dispose();
   });
 }

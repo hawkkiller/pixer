@@ -39,30 +39,18 @@ extension type _Exports._(JSObject _) implements JSObject {
   external void pixer_dealloc(int pointer, int size, int alignment);
   external void pixer_free(int handle);
   external void pixer_free_buffer(int pointer, int length);
-  external int pixer_load_from_memory_with_error(
-    int data,
-    int length,
-    int error,
-  );
-  external int pixer_load_from_memory_with_format_and_error(
+  external int pixer_load_from_memory(
     int data,
     int length,
     int format,
-    int error,
+    int outImage,
   );
   external int pixer_get_metadata(int handle, int metadata);
-  external int pixer_encode(int handle, int format, int outData, int outLength);
-  external int pixer_encode_jpeg(
-    int handle,
-    int quality,
-    int outData,
-    int outLength,
-  );
   external int pixer_batch_to_image(
     int handle,
     int operations,
     int count,
-    int error,
+    int outImage,
     int failedIndex,
   );
   external int pixer_batch_encode(
@@ -75,24 +63,6 @@ extension type _Exports._(JSObject _) implements JSObject {
     int outLength,
     int failedIndex,
   );
-  external int pixer_resize(int handle, int width, int height, int filter);
-  external int pixer_resize_exact(
-    int handle,
-    int width,
-    int height,
-    int filter,
-  );
-  external int pixer_crop_imm(int handle, int x, int y, int width, int height);
-  external int pixer_rotate90(int handle);
-  external int pixer_rotate180(int handle);
-  external int pixer_rotate270(int handle);
-  external int pixer_fliph(int handle);
-  external int pixer_flipv(int handle);
-  external int pixer_blur(int handle, double sigma);
-  external int pixer_brighten(int handle, int value);
-  external int pixer_adjust_contrast(int handle, double contrast);
-  external int pixer_grayscale(int handle);
-  external int pixer_invert(int handle);
 }
 
 final class WasmRuntime {
@@ -138,18 +108,13 @@ final class WasmRuntime {
 
   ByteBuffer get _buffer => _exports.memory.buffer.toDart;
 
-  int _allocate(int size, {int alignment = 1}) {
-    final pointer = _exports.pixer_alloc(size, alignment);
-    if (pointer == 0) throw StateError('WebAssembly allocation failed');
-    return pointer;
-  }
-
   T _withAllocation<T>(
     int size,
     T Function(int pointer) use, {
     int alignment = 1,
   }) {
-    final pointer = _allocate(size, alignment: alignment);
+    final pointer = _exports.pixer_alloc(size, alignment);
+    if (pointer == 0) throw StateError('WebAssembly allocation failed');
     try {
       return use(pointer);
     } finally {
@@ -159,32 +124,19 @@ final class WasmRuntime {
 
   void freeHandle(int handle) => _exports.pixer_free(handle);
 
-  int loadImage(Uint8List data, ImageFormatEnum? format) {
-    return _withAllocation(data.length, (dataPointer) {
-      Uint8List.view(_buffer, dataPointer, data.length).setAll(0, data);
-      return _withAllocation(4, (errorPointer) {
-        final handle = format == null
-            ? _exports.pixer_load_from_memory_with_error(
-                dataPointer,
-                data.length,
-                errorPointer,
-              )
-            : _exports.pixer_load_from_memory_with_format_and_error(
-                dataPointer,
-                data.length,
-                format.value,
-                errorPointer,
-              );
-        if (handle == 0) {
-          checkImageError(
-            _data(errorPointer, 4).getUint32(0, Endian.little),
-            'input: memory',
-          );
-        }
-        return handle;
+  // One block: the out-handle slot, then the encoded bytes.
+  int loadImage(Uint8List data, ImageFormatEnum? format) =>
+      _withAllocation(4 + data.length, (pointer) {
+        Uint8List.view(_buffer, pointer + 4, data.length).setAll(0, data);
+        final code = _exports.pixer_load_from_memory(
+          pointer + 4,
+          data.length,
+          format?.value ?? PIXER_FORMAT_DETECT,
+          pointer,
+        );
+        checkImageError(code, 'input: memory');
+        return _u32(pointer);
       }, alignment: 4);
-    });
-  }
 
   PixerMetadata metadata(int handle) => _withAllocation(12, (pointer) {
     final code = _exports.pixer_get_metadata(handle, pointer);
@@ -197,17 +149,7 @@ final class WasmRuntime {
     );
   }, alignment: 4);
 
-  Uint8List encode(int handle, ImageFormatEnum format, int quality) {
-    return _withAllocation(8, (output) {
-      final code = format == ImageFormatEnum.Jpeg
-          ? _exports.pixer_encode_jpeg(handle, quality, output, output + 4)
-          : _exports.pixer_encode(handle, format.value, output, output + 4);
-      checkImageError(code, 'format: ${format.name}');
-      return _copyOutput(output);
-    }, alignment: 4);
-  }
-
-  Uint8List batchEncode(
+  Uint8List encode(
     int handle,
     List<ImageOperation> operations,
     ImageFormatEnum format,
@@ -226,9 +168,9 @@ final class WasmRuntime {
       );
       checkBatchError(
         code,
-        _data(output + 8, 4).getUint32(0, Endian.little),
+        _u32(output + 8),
         operations,
-        'encode',
+        'encode (format: ${format.name})',
       );
       return _copyOutput(output);
     }, alignment: 4);
@@ -237,20 +179,15 @@ final class WasmRuntime {
   int batchToImage(int handle, List<ImageOperation> operations) {
     return _withOperations(operations, (operationsPointer) {
       return _withAllocation(8, (output) {
-        final result = _exports.pixer_batch_to_image(
+        final code = _exports.pixer_batch_to_image(
           handle,
           operationsPointer,
           operations.length,
           output,
           output + 4,
         );
-        checkBatchError(
-          _data(output, 4).getUint32(0, Endian.little),
-          _data(output + 4, 4).getUint32(0, Endian.little),
-          operations,
-          'toImage',
-        );
-        return result;
+        checkBatchError(code, _u32(output + 4), operations, 'toImage');
+        return _u32(output);
       }, alignment: 4);
     });
   }
@@ -270,9 +207,8 @@ final class WasmRuntime {
   }
 
   Uint8List _copyOutput(int output) {
-    final data = _data(output, 8);
-    final pointer = data.getUint32(0, Endian.little);
-    final length = data.getUint32(4, Endian.little);
+    final pointer = _u32(output);
+    final length = _u32(output + 4);
     if (pointer == 0 || length == 0)
       throw UnknownException('operation: encode');
     try {
@@ -285,31 +221,17 @@ final class WasmRuntime {
   ByteData _data(int pointer, int length) =>
       ByteData.view(_buffer, pointer, length);
 
-  int resize(int h, int w, int height, int filter) =>
-      _exports.pixer_resize(h, w, height, filter);
-  int resizeExact(int h, int w, int height, int filter) =>
-      _exports.pixer_resize_exact(h, w, height, filter);
-  int crop(int h, int x, int y, int w, int height) =>
-      _exports.pixer_crop_imm(h, x, y, w, height);
-  int rotate90(int h) => _exports.pixer_rotate90(h);
-  int rotate180(int h) => _exports.pixer_rotate180(h);
-  int rotate270(int h) => _exports.pixer_rotate270(h);
-  int flipHorizontal(int h) => _exports.pixer_fliph(h);
-  int flipVertical(int h) => _exports.pixer_flipv(h);
-  int blur(int h, double sigma) => _exports.pixer_blur(h, sigma);
-  int brightness(int h, int value) => _exports.pixer_brighten(h, value);
-  int contrast(int h, double value) => _exports.pixer_adjust_contrast(h, value);
-  int grayscale(int h) => _exports.pixer_grayscale(h);
-  int invert(int h) => _exports.pixer_invert(h);
+  int _u32(int pointer) => _data(pointer, 4).getUint32(0, Endian.little);
 
   static void _writeOperation(ImageOperation op, ByteData data, int offset) {
+    final slots = encodeOperation(op);
     data
-      ..setUint32(offset, op.kind.value, Endian.little)
-      ..setFloat64(offset + 40, op.scalar, Endian.little);
-    _writeInt64(data, offset + 8, op.arg0);
-    _writeInt64(data, offset + 16, op.arg1);
-    _writeInt64(data, offset + 24, op.arg2);
-    _writeInt64(data, offset + 32, op.arg3);
+      ..setUint32(offset, slots.kind, Endian.little)
+      ..setFloat64(offset + 40, slots.scalar, Endian.little);
+    _writeInt64(data, offset + 8, slots.arg0);
+    _writeInt64(data, offset + 16, slots.arg1);
+    _writeInt64(data, offset + 24, slots.arg2);
+    _writeInt64(data, offset + 32, slots.arg3);
   }
 
   // dart2js does not implement ByteData.setInt64. Operation arguments are

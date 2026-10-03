@@ -24,7 +24,9 @@ class PixerResizeBenchmark extends BenchmarkBase {
 
   @override
   void run() {
-    final resized = image.resize(targetWidth, targetHeight, filter: FilterTypeEnum.Lanczos3);
+    final resized = image
+        .resize(targetWidth, targetHeight, filter: FilterTypeEnum.Lanczos3)
+        .toImage();
     resized.dispose();
   }
 }
@@ -84,7 +86,7 @@ class PixerRotateBenchmark extends BenchmarkBase {
 
   @override
   void run() {
-    final rotated = image.rotate90();
+    final rotated = image.rotate90().toImage();
     rotated.dispose();
   }
 }
@@ -109,7 +111,7 @@ class PixerFlipBenchmark extends BenchmarkBase {
 
   @override
   void run() {
-    final flipped = image.flipHorizontal();
+    final flipped = image.flipHorizontal().toImage();
     flipped.dispose();
   }
 }

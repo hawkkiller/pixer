@@ -6,8 +6,8 @@ sidebar:
   order: 0
 ---
 
-Pixer provides image resizing, cropping, rotation, adjustments, encoding, and
-batch processing through one Dart API. Rust does the image work through native
+Pixer provides image resizing, cropping, rotation, adjustments, and encoding
+through one chainable Dart API. Rust does the image work through native
 FFI or WebAssembly.
 
 :::note
@@ -20,7 +20,7 @@ Add Pixer to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  pixer: ^0.0.10
+  pixer: ^0.0.11
 ```
 
 Native binaries are downloaded automatically by Dart build hooks.
@@ -32,18 +32,14 @@ import 'package:pixer/pixer.dart';
 
 final image = Pixer.fromFile('input.jpg');
 try {
-  final resized = image.resize(800, 600);
-  try {
-    resized.saveToFile('output.png');
-  } finally {
-    resized.dispose();
-  }
+  image.resize(800, 600).grayscale().saveToFile('output.png');
 } finally {
   image.dispose();
 }
 ```
 
-Every operation returns a new image. The source image is never changed.
+Operations chain into a lazy pipeline that runs in one native call. The source
+image is never changed.
 
 ## What next?
 

@@ -14,7 +14,7 @@ void main(List<String> args) {
   final image = Pixer.fromFile(args[0]);
   Pixer? thumbnail;
   try {
-    thumbnail = image.resize(800, 600);
+    thumbnail = image.resize(800, 600).toImage();
     thumbnail.saveToFile(args[1]);
 
     final metadata = thumbnail.getMetadata();

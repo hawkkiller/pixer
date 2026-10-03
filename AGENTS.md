@@ -15,9 +15,11 @@ dart run tool/generate_bindings.dart
 
 ## Release
 
-1. Push changes via PR to `main`
-2. Tag and push: `git tag pixer-assets-v1.0.0 && git push origin pixer-assets-v1.0.0`
-3. CI builds all platforms and creates GitHub Release
+1. Bump the version in `packages/pixer/pubspec.yaml`, `packages/pixer/lib/src/hook/version.dart` (`pixer-assets-v<version>`), and the `CHANGELOG.md` heading, then merge via PR to `main`
+2. Tag the merge commit on `main` and push: `git tag pixer-assets-v1.0.0 && git push origin pixer-assets-v1.0.0`
+3. CI (`build_release.yaml`) checks the versions match the tag, builds all platforms, creates the GitHub Release, regenerates `lib/src/hook/hashes.dart` from it, publishes to pub.dev, and pushes the hashes commit to `main`
+
+pub.dev publishing uses GitHub OIDC; the package admin page must allow `hawkkiller/pixer` with tag pattern `pixer-assets-v{{version}}`.
 
 ## Changelog
 

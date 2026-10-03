@@ -3,14 +3,15 @@ title: Image operations
 description: Resize, crop, rotate, flip, and adjust images.
 ---
 
-Direct operations return a new `Pixer` instance and leave the original image
-unchanged.
+Each operation returns a lazy [pipeline](/pipelines) that you can chain and
+finish with `encode`, `saveToFile`, or `toImage`. The original image is never
+changed.
 
 ## Resize
 
 ```dart
-final fitted = image.resize(800, 600);
-final exact = image.resizeExact(800, 600);
+final fitted = image.resize(800, 600).toImage();
+final exact = image.resizeExact(800, 600).toImage();
 ```
 
 `resize` preserves the aspect ratio. `resizeExact` may stretch or squash the
@@ -19,11 +20,9 @@ image.
 Choose a resize filter when needed:
 
 ```dart
-final pixels = image.resize(
-  320,
-  240,
-  filter: FilterTypeEnum.Nearest,
-);
+final pixels = image
+    .resize(320, 240, filter: FilterTypeEnum.Nearest)
+    .encode(const PixerPngEncoder());
 ```
 
 The available filters are `Nearest`, `Triangle`, `CatmullRom`, `Gaussian`, and
@@ -32,31 +31,32 @@ The available filters are `Nearest`, `Triangle`, `CatmullRom`, `Gaussian`, and
 ## Crop
 
 ```dart
-final cropped = image.crop(100, 100, 400, 300);
+image.crop(100, 100, 400, 300).saveToFile('cropped.png');
 ```
 
 The arguments are `x`, `y`, `width`, and `height`. The crop rectangle must fit
-inside the image.
+inside the image produced by the preceding operations.
 
 ## Rotate and flip
 
 ```dart
-final clockwise = image.rotate90();
-final upsideDown = image.rotate180();
-final counterClockwise = image.rotate270();
-final mirrored = image.flipHorizontal();
-final vertical = image.flipVertical();
+image.rotate90();
+image.rotate180();
+image.rotate270();
+image.flipHorizontal();
+image.flipVertical();
 ```
 
 ## Adjust
 
 ```dart
-final soft = image.blur(2.5);
-final lighter = image.brightness(30);
-final punchier = image.contrast(20);
-final gray = image.grayscale();
-final negative = image.invert();
+image.blur(2.5);
+image.brightness(30);
+image.contrast(20);
+image.grayscale();
+image.invert();
 ```
 
-Remember to dispose every returned image after use. For several operations,
-prefer a [batch](/batch-processing) so intermediate images remain inside Rust.
+Operations chain in any order, for example
+`image.resize(800, 600).contrast(10).grayscale()`. Dispose every image returned
+by `toImage` after use.
