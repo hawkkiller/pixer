@@ -35,8 +35,8 @@ enum FilterTypeEnum {
   };
 }
 
-/// Error code returned through `out_error` pointers and as the result of
-/// operations that don't return a handle.
+/// Result of every fallible Pixer function; outputs are written through
+/// out-parameters only on `Success`.
 enum ImageErrorCode {
   /// The operation succeeded.
   Success(0),
@@ -126,17 +126,31 @@ enum ImageFormatEnum {
 }
 
 /// Stable operation identifiers shared by the native and Dart batch APIs.
+///
+/// Each variant documents how it reads the `PixerOperation` slots; unused
+/// slots are ignored.
 enum PixerOperationKind {
+  /// Fit within `arg0` x `arg1`, preserving aspect ratio. `arg2`: `FilterTypeEnum`.
   Resize(0),
+
+  /// Resize to exactly `arg0` x `arg1`. `arg2`: `FilterTypeEnum`.
   ResizeExact(1),
+
+  /// `arg0`, `arg1`: origin; `arg2`, `arg3`: width and height.
   Crop(2),
   Rotate90(3),
   Rotate180(4),
   Rotate270(5),
   FlipHorizontal(6),
   FlipVertical(7),
+
+  /// Gaussian blur, `scalar`: sigma (zero or a positive normal f32).
   Blur(8),
+
+  /// `arg0`: i32 offset added to color channels, preserving alpha.
   Brightness(9),
+
+  /// `scalar`: finite f32 contrast around the midpoint; 0 is neutral.
   Contrast(10),
   Grayscale(11),
   Invert(12);
@@ -161,3 +175,5 @@ enum PixerOperationKind {
     _ => throw ArgumentError('Unknown value for PixerOperationKind: $value'),
   };
 }
+
+const int PIXER_FORMAT_DETECT = 4294967295;

@@ -8,36 +8,31 @@ import 'image_operation.dart';
 import 'pixer_encoder.dart';
 import 'pixer_exception.dart';
 
-part 'pixer_batch.dart';
+part 'pixer_pipeline.dart';
 
-/// A loaded image, backed by Rust on native and web platforms.
+/// A decoded image, backed by Rust on native and web platforms.
 ///
-/// Operations like [resize], [crop], [blur], and so on each return a new
-/// [Pixer]; the original is unchanged. Encode with [encode] or save with
-/// [saveToFile].
+/// Operations like [resize], [crop], [blur], and so on start a lazy
+/// [PixerPipeline]; chain more operations and finish with
+/// [PixerPipeline.encode], [PixerPipeline.saveToFile], or
+/// [PixerPipeline.toImage]. The whole chain runs in one native call and the
+/// original image is unchanged, so one [Pixer] can feed many pipelines.
 ///
 /// ## Memory management
 ///
-/// Every [Pixer] owns a Rust image. Call [dispose] when you're done with
-/// it — including intermediates in a pipeline. Native finalizers provide a safety
-/// net but are not guaranteed to run (especially across isolates), so explicit
+/// Every [Pixer] owns a Rust image: the one you load and every
+/// [PixerPipeline.toImage] result. Call [dispose] when you're done with it.
+/// Pipelines own no native memory. Native finalizers provide a safety net but
+/// are not guaranteed to run (especially across isolates), so explicit
 /// disposal is the only reliable strategy.
 ///
 /// Example:
 /// ```dart
 /// final image = Pixer.fromFile('input.jpg');
-/// final resized = image.resize(800, 600);
-/// resized.saveToFile('output.jpg');
-/// resized.dispose();
+/// image.resize(800, 600).grayscale().saveToFile('output.jpg');
 /// image.dispose();
 /// ```
 final class Pixer {
-  static const _maxUint32 = 0xFFFFFFFF;
-  static const _minInt32 = -0x80000000;
-  static const _maxInt32 = 0x7FFFFFFF;
-  static const _maxFloat32 = 3.4028234663852886e38;
-  static const _minNormalFloat32 = 1.1754943508222875e-38;
-
   Pixer._(this._backend);
   final BackendImage _backend;
   bool _isDisposed = false;
@@ -65,18 +60,10 @@ final class Pixer {
 
   /// Loads an image from a byte buffer
   ///
+  /// The format is detected from the bytes unless [format] is given.
   /// Throws [DecodingException] if the buffer is empty or cannot be decoded.
   /// Throws [UnsupportedFormatException] if the format is not supported.
-  factory Pixer.fromMemory(Uint8List data) {
-    if (data.isEmpty) throw DecodingException('input buffer is empty');
-    return Pixer._(BackendImage.fromMemory(data));
-  }
-
-  /// Loads an image from a byte buffer with a specific format
-  ///
-  /// Throws [DecodingException] if the buffer is empty or cannot be decoded.
-  /// Throws [UnsupportedFormatException] if the format is not supported.
-  factory Pixer.fromMemoryWithFormat(Uint8List data, ImageFormatEnum format) {
+  factory Pixer.fromMemory(Uint8List data, {ImageFormatEnum? format}) {
     if (data.isEmpty) throw DecodingException('input buffer is empty');
     return Pixer._(BackendImage.fromMemory(data, format));
   }
@@ -88,75 +75,9 @@ final class Pixer {
     }
   }
 
-  void _validateDimensions(int width, int height, {String? context}) {
-    if (width <= 0 ||
-        height <= 0 ||
-        width > _maxUint32 ||
-        height > _maxUint32) {
-      throw InvalidDimensionsException(
-        context ?? 'width and height must fit unsigned 32-bit values',
-      );
-    }
-  }
-
-  void _validateCoordinate(int value, String name) {
-    if (value < 0 || value > _maxUint32) {
-      throw InvalidDimensionsException(
-        '$name must fit an unsigned 32-bit value',
-      );
-    }
-  }
-
-  void _validateBlur(double sigma) {
-    if (!sigma.isFinite ||
-        sigma < 0 ||
-        sigma > _maxFloat32 ||
-        (sigma > 0 && sigma < _minNormalFloat32)) {
-      throw ArgumentError.value(
-        sigma,
-        'sigma',
-        'Must be zero or a positive normal 32-bit float',
-      );
-    }
-  }
-
-  void _validateBrightness(int value) {
-    if (value < _minInt32 || value > _maxInt32) {
-      throw RangeError.range(value, _minInt32, _maxInt32, 'value');
-    }
-  }
-
-  void _validateContrast(double contrast) {
-    if (!contrast.isFinite || contrast.abs() > _maxFloat32) {
-      throw ArgumentError.value(
-        contrast,
-        'contrast',
-        'Must be finite and fit a 32-bit float',
-      );
-    }
-  }
-
-  void _validateCrop(int x, int y, int width, int height) {
-    _validateCoordinate(x, 'x');
-    _validateCoordinate(y, 'y');
-    _validateDimensions(
-      width,
-      height,
-      context: 'crop width and height must be > 0',
-    );
-
-    // Bounds validation
-    final meta = getMetadata();
-    if (x + width > meta.width) {
-      throw InvalidDimensionsException(
-        'crop right edge (${x + width}) exceeds image width (${meta.width})',
-      );
-    }
-    if (y + height > meta.height) {
-      throw InvalidDimensionsException(
-        'crop bottom edge (${y + height}) exceeds image height (${meta.height})',
-      );
-    }
+  PixerPipeline get _pipeline {
+    _checkDisposed();
+    return PixerPipeline._(this, const []);
   }
 
   /// Gets the image metadata (width, height, color type).
@@ -182,241 +103,65 @@ final class Pixer {
   /// The format is determined by the file extension.
   /// Throws [InvalidPathException] if the path is empty.
   /// Throws [UnsupportedError] on web; use [encode] instead.
-  void saveToFile(String path) {
-    _checkDisposed();
-    if (path.trim().isEmpty) throw InvalidPathException('path is empty');
-    _backend.saveToFile(path);
-  }
+  void saveToFile(String path) => _pipeline.saveToFile(path);
 
   /// Encodes the image to a byte buffer with [encoder].
   ///
   /// Pass `const PixerPngEncoder()` (or any other [PixerEncoder]) for default
   /// settings, or e.g. `PixerJpegEncoder(quality: 90)` to tune output.
-  Uint8List encode(PixerEncoder encoder) {
-    _checkDisposed();
-    return _backend.encode(encoder);
-  }
+  Uint8List encode(PixerEncoder encoder) => _pipeline.encode(encoder);
 
-  /// Starts a lazy batch of image operations.
-  ///
-  /// Operations are recorded in Dart and executed together when [PixerBatch.toImage],
-  /// [PixerBatch.encode], or [PixerBatch.saveToFile] is called.
-  PixerBatch batch() {
-    _checkDisposed();
-    return PixerBatch._(this);
-  }
-
-  /// Resizes the image to fit *within* [width] x [height], preserving aspect
-  /// ratio.
-  ///
-  /// The result is at most [width] x [height]; the smaller dimension is
-  /// scaled proportionally so the image is never distorted. Use
-  /// [resizeExact] to force exact dimensions.
-  ///
-  /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer resize(
+  /// Starts a pipeline that resizes to fit within [width] x [height],
+  /// preserving aspect ratio. See [PixerPipeline.resize].
+  PixerPipeline resize(
     int width,
     int height, {
     FilterTypeEnum filter = FilterTypeEnum.Lanczos3,
-  }) {
-    _checkDisposed();
-    _validateDimensions(width, height);
-    return Pixer._(
-      _backend.transform(
-        ImageOperation(
-          PixerOperationKind.Resize,
-          'resize',
-          width,
-          height,
-          filter.value,
-        ),
-      ),
-    );
-  }
+  }) => _pipeline.resize(width, height, filter: filter);
 
-  /// Resizes the image to exactly [width] x [height], ignoring aspect ratio.
-  ///
-  /// May visibly stretch or squash the image. See [resize] to preserve
-  /// aspect ratio.
-  ///
-  /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer resizeExact(
+  /// Starts a pipeline that resizes to exactly [width] x [height]. See
+  /// [PixerPipeline.resizeExact].
+  PixerPipeline resizeExact(
     int width,
     int height, {
     FilterTypeEnum filter = FilterTypeEnum.Lanczos3,
-  }) {
-    _checkDisposed();
-    _validateDimensions(width, height);
-    return Pixer._(
-      _backend.transform(
-        ImageOperation(
-          PixerOperationKind.ResizeExact,
-          'resizeExact',
-          width,
-          height,
-          filter.value,
-        ),
-      ),
-    );
-  }
+  }) => _pipeline.resizeExact(width, height, filter: filter);
 
-  /// Crops the image to the specified rectangle
-  ///
-  /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer crop(int x, int y, int width, int height) {
-    _checkDisposed();
-    _validateCrop(x, y, width, height);
-    return Pixer._(
-      _backend.transform(
-        ImageOperation(PixerOperationKind.Crop, 'crop', x, y, width, height),
-      ),
-    );
-  }
+  /// Starts a pipeline that crops to a rectangle. See [PixerPipeline.crop].
+  PixerPipeline crop(int x, int y, int width, int height) =>
+      _pipeline.crop(x, y, width, height);
 
-  /// Rotates the image 90 degrees clockwise
-  ///
-  /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer rotate90() {
-    _checkDisposed();
-    return Pixer._(
-      _backend.transform(
-        const ImageOperation(PixerOperationKind.Rotate90, 'rotate90'),
-      ),
-    );
-  }
+  /// Starts a pipeline that rotates 90 degrees clockwise.
+  PixerPipeline rotate90() => _pipeline.rotate90();
 
-  /// Rotates the image 180 degrees
-  ///
-  /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer rotate180() {
-    _checkDisposed();
-    return Pixer._(
-      _backend.transform(
-        const ImageOperation(PixerOperationKind.Rotate180, 'rotate180'),
-      ),
-    );
-  }
+  /// Starts a pipeline that rotates 180 degrees.
+  PixerPipeline rotate180() => _pipeline.rotate180();
 
-  /// Rotates the image 270 degrees clockwise (90 degrees counter-clockwise)
-  ///
-  /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer rotate270() {
-    _checkDisposed();
-    return Pixer._(
-      _backend.transform(
-        const ImageOperation(PixerOperationKind.Rotate270, 'rotate270'),
-      ),
-    );
-  }
+  /// Starts a pipeline that rotates 270 degrees clockwise.
+  PixerPipeline rotate270() => _pipeline.rotate270();
 
-  /// Flips the image horizontally
-  ///
-  /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer flipHorizontal() {
-    _checkDisposed();
-    return Pixer._(
-      _backend.transform(
-        const ImageOperation(
-          PixerOperationKind.FlipHorizontal,
-          'flipHorizontal',
-        ),
-      ),
-    );
-  }
+  /// Starts a pipeline that flips horizontally.
+  PixerPipeline flipHorizontal() => _pipeline.flipHorizontal();
 
-  /// Flips the image vertically
-  ///
-  /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer flipVertical() {
-    _checkDisposed();
-    return Pixer._(
-      _backend.transform(
-        const ImageOperation(PixerOperationKind.FlipVertical, 'flipVertical'),
-      ),
-    );
-  }
+  /// Starts a pipeline that flips vertically.
+  PixerPipeline flipVertical() => _pipeline.flipVertical();
 
-  /// Applies a Gaussian blur to the image.
-  ///
-  /// [sigma] controls the blur strength (higher = more blur).
-  /// A value of 0 results in no change.
-  /// Throws [ArgumentError] unless sigma is zero or a positive normal 32-bit float.
-  /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer blur(double sigma) {
-    _checkDisposed();
-    _validateBlur(sigma);
-    return Pixer._(
-      _backend.transform(
-        ImageOperation(PixerOperationKind.Blur, 'blur', 0, 0, 0, 0, sigma),
-      ),
-    );
-  }
+  /// Starts a pipeline that applies a Gaussian blur. See
+  /// [PixerPipeline.blur].
+  PixerPipeline blur(double sigma) => _pipeline.blur(sigma);
 
-  /// Adjusts brightness by adding [value] to color channels, preserving alpha.
-  ///
-  /// Values are clamped to the channel range (`[0, 255]` for 8-bit images).
-  /// Negative values darken, positive values brighten. For 8-bit images the
-  /// practical range is roughly `-255..=255`;
-  /// larger magnitudes simply saturate.
-  ///
-  /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer brightness(int value) {
-    _checkDisposed();
-    _validateBrightness(value);
-    return Pixer._(
-      _backend.transform(
-        ImageOperation(PixerOperationKind.Brightness, 'brightness', value),
-      ),
-    );
-  }
+  /// Starts a pipeline that adjusts brightness. See
+  /// [PixerPipeline.brightness].
+  PixerPipeline brightness(int value) => _pipeline.brightness(value);
 
-  /// Adjusts contrast around the midpoint.
-  ///
-  /// [contrast] of `0.0` leaves the image unchanged. Positive values increase
-  /// contrast, negative values decrease it. Must be finite.
-  ///
-  /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer contrast(double contrast) {
-    _checkDisposed();
-    _validateContrast(contrast);
-    return Pixer._(
-      _backend.transform(
-        ImageOperation(
-          PixerOperationKind.Contrast,
-          'contrast',
-          0,
-          0,
-          0,
-          0,
-          contrast,
-        ),
-      ),
-    );
-  }
+  /// Starts a pipeline that adjusts contrast. See [PixerPipeline.contrast].
+  PixerPipeline contrast(double contrast) => _pipeline.contrast(contrast);
 
-  /// Converts the image to grayscale
-  ///
-  /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer grayscale() {
-    _checkDisposed();
-    return Pixer._(
-      _backend.transform(
-        const ImageOperation(PixerOperationKind.Grayscale, 'grayscale'),
-      ),
-    );
-  }
+  /// Starts a pipeline that converts to grayscale.
+  PixerPipeline grayscale() => _pipeline.grayscale();
 
-  /// Inverts the colors of the image.
-  ///
-  /// Returns a new [Pixer] instance. The original is not modified.
-  Pixer invert() {
-    _checkDisposed();
-    return Pixer._(
-      _backend.transform(
-        const ImageOperation(PixerOperationKind.Invert, 'invert'),
-      ),
-    );
-  }
+  /// Starts a pipeline that inverts the colors.
+  PixerPipeline invert() => _pipeline.invert();
 
   /// Disposes the native resources
   ///

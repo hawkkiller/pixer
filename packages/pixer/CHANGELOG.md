@@ -1,3 +1,15 @@
+## 0.0.11
+
+- **Breaking:** Operations on `Pixer` (`resize`, `crop`, `blur`, ...) now return a lazy `PixerPipeline` instead of a new `Pixer`. Chain operations and finish with `encode`, `saveToFile`, or `toImage()`; the whole chain runs in one native call. Add `.toImage()` where a `Pixer` is still needed.
+- **Breaking:** Removed `Pixer.batch()` and renamed `PixerBatch` to `PixerPipeline`. Pipelines are now immutable, so branching from a shared prefix no longer leaks operations between branches.
+- **Breaking:** Image-dependent errors such as out-of-bounds `crop` are now thrown by the terminal call, not by the operation. Argument validation still happens when an operation is added.
+- **Breaking:** Merged `Pixer.fromMemoryWithFormat(data, format)` into `Pixer.fromMemory(data, format: format)`.
+- Exported `ImageErrorCode`, the type of `PixerException.code`.
+- `encode` and `saveToFile` now run through the pipeline path, so native failures raise specific exceptions (e.g. `InvalidDimensionsException`) instead of `UnknownException`. Out-of-bounds `crop` is now reported by the native engine.
+- Pipelines validate every operation before processing any pixels.
+- Downloaded binaries are now verified with SHA-256 instead of MD5.
+- **Breaking (native ABI 2):** Reduced the C API to `pixer_load`, `pixer_load_from_memory` (format or `PIXER_FORMAT_DETECT`), `pixer_get_metadata`, and the `pixer_batch_*` functions. Every fallible function returns an `ImageErrorCode` and writes results through out-parameters; formats are passed as validated `u32` values. Rebuild binaries for this package revision.
+
 ## 0.0.10
 
 - Fixed zero blur changing pixels and rejected subnormal blur values before they can panic in Rust.

@@ -51,52 +51,15 @@ final class BackendImage {
 
   PixerMetadata getMetadata() => _wasm.metadata(_handle);
 
-  BackendImage transform(ImageOperation op) => BackendImage._(switch (op.kind) {
-    PixerOperationKind.Resize => _wasm.resize(
-      _handle,
-      op.arg0,
-      op.arg1,
-      op.arg2,
-    ),
-    PixerOperationKind.ResizeExact => _wasm.resizeExact(
-      _handle,
-      op.arg0,
-      op.arg1,
-      op.arg2,
-    ),
-    PixerOperationKind.Crop => _wasm.crop(
-      _handle,
-      op.arg0,
-      op.arg1,
-      op.arg2,
-      op.arg3,
-    ),
-    PixerOperationKind.Rotate90 => _wasm.rotate90(_handle),
-    PixerOperationKind.Rotate180 => _wasm.rotate180(_handle),
-    PixerOperationKind.Rotate270 => _wasm.rotate270(_handle),
-    PixerOperationKind.FlipHorizontal => _wasm.flipHorizontal(_handle),
-    PixerOperationKind.FlipVertical => _wasm.flipVertical(_handle),
-    PixerOperationKind.Blur => _wasm.blur(_handle, op.scalar),
-    PixerOperationKind.Brightness => _wasm.brightness(_handle, op.arg0),
-    PixerOperationKind.Contrast => _wasm.contrast(_handle, op.scalar),
-    PixerOperationKind.Grayscale => _wasm.grayscale(_handle),
-    PixerOperationKind.Invert => _wasm.invert(_handle),
-  });
-
   BackendImage batchToImage(List<ImageOperation> operations) =>
       BackendImage._(_wasm.batchToImage(_handle, operations));
 
-  Uint8List encode(PixerEncoder encoder, [List<ImageOperation>? operations]) =>
-      operations == null
-      ? _wasm.encode(_handle, encoder.format, encoder.jpegQuality)
-      : _wasm.batchEncode(
-          _handle,
-          operations,
-          encoder.format,
-          encoder.jpegQuality,
-        );
+  Uint8List encode(
+    PixerEncoder encoder, [
+    List<ImageOperation> operations = const [],
+  ]) => _wasm.encode(_handle, operations, encoder.format, encoder.jpegQuality);
 
-  void saveToFile(String path, [List<ImageOperation>? operations]) =>
+  void saveToFile(String path, [List<ImageOperation> operations = const []]) =>
       throw UnsupportedError(
         'File writes are unavailable on web; use encode instead',
       );

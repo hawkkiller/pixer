@@ -18,7 +18,32 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Fails a release tag in seconds instead of after the full build matrix.
+  preflight:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/pixer/
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          fetch-depth: 0
+      - name: Check release versions
+        if: startsWith(github.ref, 'refs/tags/pixer-assets-v')
+        run: |
+          version=$(sed -n 's/^version: //p' pubspec.yaml)
+          fail() { echo "::error::$1"; exit 1; }
+          [ "$GITHUB_REF_NAME" = "pixer-assets-v$version" ] \
+            || fail "Tag $GITHUB_REF_NAME does not match pubspec version $version"
+          grep -qx "const version = '$GITHUB_REF_NAME';" lib/src/hook/version.dart \
+            || fail "lib/src/hook/version.dart does not point at $GITHUB_REF_NAME"
+          grep -qx "## $version" CHANGELOG.md \
+            || fail "CHANGELOG.md has no '## $version' section"
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
+            || fail "Release tags must point at a commit on main"
+
   wasm:
+    needs: preflight
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -27,10 +52,9 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
       - uses: dart-lang/setup-dart@e51d8e571e22473a2ddebf0ef8a2123f0ab2c02c
         with:
-          sdk: main
+          sdk: stable
+      # Provides rustup; builds use the toolchain and targets pinned in native/rust-toolchain.toml.
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
       - run: dart tool/build_wasm.dart libs/pixer.wasm
       - run: cp libs/pixer.wasm test/pixer.wasm
       - run: dart test -p chrome test/pixer_test.dart test/pixer_wasm_test.dart
@@ -42,6 +66,7 @@ jobs:
           if-no-files-found: error
 
   build:
+    needs: preflight
     strategy:
       fail-fast: false
       matrix:
@@ -58,8 +83,9 @@ jobs:
 
       - uses: dart-lang/setup-dart@e51d8e571e22473a2ddebf0ef8a2123f0ab2c02c
         with:
-          sdk: main
+          sdk: stable
 
+      # Provides rustup; builds use the toolchain and targets pinned in native/rust-toolchain.toml.
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: nttld/setup-ndk@afb4c9964b521afb97c864b7d40b11e6911bd410
@@ -68,38 +94,13 @@ jobs:
         if: ${{ matrix.os == 'ubuntu' }} # Only build on one host.
 
       - name: Install native toolchains
-        run: sudo apt-get update && sudo apt-get install clang-15 gcc-i686-linux-gnu gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf gcc-riscv64-linux-gnu
+        run: sudo apt-get update && sudo apt-get install clang-15 gcc-aarch64-linux-gnu
         if: ${{ matrix.os == 'ubuntu' }}
 
-      - name: Install Rust targets (Linux)
-        if: matrix.os == 'ubuntu'
-        run: |
-          rustup target add armv7-linux-androideabi
-          rustup target add aarch64-linux-android
-          rustup target add i686-linux-android
-          rustup target add x86_64-linux-android
-          rustup target add armv7-unknown-linux-gnueabihf
-          rustup target add aarch64-unknown-linux-gnu
-          rustup target add i686-unknown-linux-gnu
-          rustup target add x86_64-unknown-linux-gnu
-
-      - name: Install Rust targets (macOS)
-        if: matrix.os == 'macos'
-        run: |
-          rustup target add aarch64-apple-darwin
-          rustup target add x86_64-apple-darwin
-          rustup target add aarch64-apple-ios
-          rustup target add aarch64-apple-ios-sim
-          rustup target add x86_64-apple-ios
-
-      - name: Install Rust targets (Windows)
-        if: matrix.os == 'windows'
-        run: |
-          rustup target add aarch64-pc-windows-msvc
-          rustup target add x86_64-pc-windows-msvc
-          # rustup target add i686-pc-windows-msvc
-
       - run: dart pub get
+
+      # Builds the host library through the workspace's local_build hook.
+      - run: dart test test/pixer_test.dart test/pixer_file_test.dart
 
       - run: mkdir libs
 
@@ -184,3 +185,52 @@ jobs:
         with:
           files: "packages/pixer/libs/**"
           fail_on_unmatched_files: true
+
+  publish:
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/pixer-assets-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the regenerated hashes to main
+      id-token: write # pub.dev automated publishing
+
+    defaults:
+      run:
+        working-directory: packages/pixer/
+
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          fetch-depth: 0
+
+      - uses: dart-lang/setup-dart@e51d8e571e22473a2ddebf0ef8a2123f0ab2c02c
+        with:
+          sdk: stable
+
+      - run: dart pub get
+
+      # Downloads every asset from the release above, so a missing upload fails before publishing.
+      - run: dart tool/generate_asset_hashes.dart
+
+      - name: Commit asset hashes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/src/hook/hashes.dart
+          git diff --cached --quiet || git commit -m "release: update ${GITHUB_REF_NAME#pixer-assets-v} asset hashes"
+
+      # Publishes the tagged tree plus the new hashes. Skipped on re-runs after a successful publish.
+      - name: Publish to pub.dev
+        run: |
+          version=$(sed -n 's/^version: //p' pubspec.yaml)
+          if curl -sf "https://pub.dev/api/packages/pixer/versions/$version" > /dev/null; then
+            echo "pixer $version is already on pub.dev"
+          else
+            dart pub publish --force
+          fi
+
+      - name: Push asset hashes to main
+        run: |
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main

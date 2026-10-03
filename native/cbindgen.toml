@@ -5,16 +5,8 @@ cpp_compat = true
 
 [export]
 exclude = ["pixer_alloc", "pixer_dealloc"]
-include = [
-  "ImageHandle",
-  "ImageResult",
-  "ImageErrorCode",
-  "ImageFormatEnum",
-  "FilterTypeEnum",
-  "ImageMetadata",
-  "PixerOperation",
-  "PixerOperationKind",
-]
+# Not reachable from any function signature, but needed by the Dart side.
+include = ["ImageFormatEnum", "FilterTypeEnum", "PixerOperationKind"]
 
 [parse]
 parse_deps = false

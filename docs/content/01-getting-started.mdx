@@ -7,7 +7,7 @@ description: Install Pixer and process an image with the Dart API.
 
 ```yaml title="pubspec.yaml"
 dependencies:
-  pixer: ^0.0.10
+  pixer: ^0.0.11
 ```
 
 Run your package manager as usual:
@@ -34,28 +34,24 @@ final bytes = await File('photo.png').readAsBytes();
 final image = Pixer.fromMemory(bytes);
 ```
 
-Pixer auto-detects the format. Use `fromMemoryWithFormat` only when the format
-must be supplied explicitly.
+Pixer auto-detects the format. Pass `format:` to `fromMemory` only when the
+format must be supplied explicitly.
 
 ## Transform and encode
 
 ```dart
 final image = Pixer.fromFile('photo.jpg');
 try {
-  final thumbnail = image.resize(640, 640);
-  try {
-    final bytes = thumbnail.encode(PixerJpegEncoder(quality: 85));
-    await File('thumbnail.jpg').writeAsBytes(bytes);
-  } finally {
-    thumbnail.dispose();
-  }
+  final bytes = image.resize(640, 640).encode(PixerJpegEncoder(quality: 85));
+  await File('thumbnail.jpg').writeAsBytes(bytes);
 } finally {
   image.dispose();
 }
 ```
 
-`resize` preserves aspect ratio and fits the image within the requested bounds.
-Use `resizeExact` when the output must have those exact dimensions.
+`resize` starts a lazy [pipeline](/pipelines) that runs when you call
+`encode`. It preserves aspect ratio and fits the image within the requested
+bounds. Use `resizeExact` when the output must have those exact dimensions.
 
 ## Supported formats
 

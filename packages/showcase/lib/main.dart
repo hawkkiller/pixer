@@ -132,18 +132,17 @@ Future<_ProcessedImage> _upscaleWithPixer(Uint8List bytes) async {
   await Pixer.initialize();
   final stopwatch = Stopwatch()..start();
   final source = Pixer.fromMemory(bytes);
-  Pixer? result;
   try {
-    result = source.resizeExact(
-      _targetWidth,
-      _targetHeight,
-      filter: FilterTypeEnum.Lanczos3,
-    );
-    final encoded = result.encode(PixerJpegEncoder(quality: 100));
+    final encoded = source
+        .resizeExact(
+          _targetWidth,
+          _targetHeight,
+          filter: FilterTypeEnum.Lanczos3,
+        )
+        .encode(PixerJpegEncoder(quality: 100));
     stopwatch.stop();
     return _ProcessedImage(encoded, stopwatch.elapsed);
   } finally {
-    result?.dispose();
     source.dispose();
   }
 }

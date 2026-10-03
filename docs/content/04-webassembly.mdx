@@ -17,10 +17,7 @@ await Pixer.initialize();
 
 final image = Pixer.fromMemory(bytes);
 try {
-  final output = image
-      .batch()
-      .resize(800, 600)
-      .encode(const PixerWebPEncoder());
+  final output = image.resize(800, 600).encode(const PixerWebPEncoder());
 } finally {
   image.dispose();
 }
@@ -38,8 +35,7 @@ await Pixer.initialize(wasmBytes: wasmBytes);
 
 ## Browser API limits
 
-Use `fromMemory` and `encode` on the web. `fromFile`, `saveToFile`, and batch
-`saveToFile` throw `UnsupportedError` because browsers do not expose native file
-paths.
+Use `fromMemory` and `encode` on the web. `fromFile` and `saveToFile` throw
+`UnsupportedError` because browsers do not expose native file paths.
 
 Pixer supports both JavaScript-compiled and Dart/Flutter Wasm builds.

@@ -26,8 +26,9 @@ print('${image.width}x${image.height}');
 
 ## Release resources
 
-Every `Pixer` owns a Rust image handle. Always call `dispose()` when finished,
-including for images returned by direct operations.
+Every `Pixer` owns a Rust image handle: the one you load and every image
+returned by `toImage`. Always call `dispose()` when finished. Pipelines own no
+native memory.
 
 Native finalizers are a safety net, but they are not guaranteed to run. Web
 builds require explicit disposal.
