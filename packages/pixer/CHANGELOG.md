@@ -1,3 +1,8 @@
+## Unreleased
+
+- Native binaries no longer include image codecs outside the supported formats (AVIF, EXR, HDR, QOI, TGA, DDS, PNM, Farbfeld), shrinking them by roughly 60% (macOS arm64: 4.9 MB to 1.8 MB). Auto-detected loading of those formats now throws `UnsupportedFormatException`.
+- Added the `formats` hook user define to compile in only selected formats. Setting it builds the native library from source and requires a Rust toolchain.
+
 ## 0.0.11
 
 - **Breaking:** Operations on `Pixer` (`resize`, `crop`, `blur`, ...) now return a lazy `PixerPipeline` instead of a new `Pixer`. Chain operations and finish with `encode`, `saveToFile`, or `toImage()`; the whole chain runs in one native call. Add `.toImage()` where a `Pixer` is still needed.

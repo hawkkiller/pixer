@@ -35,7 +35,8 @@ sealed class PixerException implements Exception {
   static String _defaultMessage(ImageErrorCode code) => switch (code) {
     ImageErrorCode.Success => 'Success',
     ImageErrorCode.InvalidPath => 'Invalid path provided',
-    ImageErrorCode.UnsupportedFormat => 'Unsupported image format',
+    ImageErrorCode.UnsupportedFormat =>
+      'Unsupported image format, or format not enabled in this build',
     ImageErrorCode.DecodingError => 'Failed to decode image',
     ImageErrorCode.EncodingError => 'Failed to encode image',
     ImageErrorCode.IoError => 'I/O error occurred',

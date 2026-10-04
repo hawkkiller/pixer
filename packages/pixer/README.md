@@ -65,6 +65,21 @@ final image = Pixer.fromMemory(bytes, format: ImageFormatEnum.Png);
 
 PNG, JPEG, GIF, WebP, BMP, ICO, TIFF
 
+To ship a smaller native binary, list only the formats you need in your app's
+`pubspec.yaml`. Pixer then builds the native library from source, which
+requires a [Rust toolchain](https://rustup.rs):
+
+```yaml
+hooks:
+  user_defines:
+    pixer:
+      formats: [jpeg, png]
+```
+
+Using a format that is not enabled throws `UnsupportedFormatException`.
+`ico` also enables `bmp` and `png`. This setting does not affect web builds,
+which use the prebuilt `pixer.wasm`.
+
 ## Pipelines
 
 Operations on a `Pixer` return a lazy `PixerPipeline`. Chain as many

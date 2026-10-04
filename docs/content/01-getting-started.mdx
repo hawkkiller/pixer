@@ -56,3 +56,18 @@ bounds. Use `resizeExact` when the output must have those exact dimensions.
 ## Supported formats
 
 Pixer decodes and encodes PNG, JPEG, GIF, WebP, BMP, ICO, and TIFF.
+
+To ship a smaller native binary, list only the formats you need. Pixer then
+builds the native library from source, which requires a
+[Rust toolchain](https://rustup.rs):
+
+```yaml title="pubspec.yaml"
+hooks:
+  user_defines:
+    pixer:
+      formats: [jpeg, png]
+```
+
+Using a format that is not enabled throws `UnsupportedFormatException`.
+`ico` also enables `bmp` and `png`. Web builds always use the prebuilt
+`pixer.wasm`.

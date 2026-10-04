@@ -8,7 +8,9 @@ import 'package:hooks/hooks.dart';
 
 void main(List<String> args) async {
   await build(args, (input, output) async {
-    final localBuild = input.userDefines['local_build'] as bool? ?? false;
+    final formats = readFormats(input);
+    // Prebuilt binaries include every format, so a custom set needs a source build.
+    final localBuild = formats != null || (input.userDefines['local_build'] as bool? ?? false);
 
     final CodeConfig codeConfig;
 
@@ -20,7 +22,7 @@ void main(List<String> args) async {
     }
 
     if (localBuild) {
-      return runLocalBuild(input, output);
+      return runLocalBuild(input, output, formats: formats);
     }
 
     final targetOS = codeConfig.targetOS;

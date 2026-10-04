@@ -1,6 +1,4 @@
-use image::{
-    DynamicImage, ImageError, ImageFormat, codecs::jpeg::JpegEncoder, imageops::FilterType,
-};
+use image::{DynamicImage, ImageError, ImageFormat, imageops::FilterType};
 use std::{borrow::Cow, ffi::CStr, os::raw::c_char, path::Path, slice};
 
 #[cfg(target_arch = "wasm32")]
@@ -416,7 +414,13 @@ fn encode_image(
             if !(1..=100).contains(&jpeg_quality) {
                 return Err(ImageErrorCode::InvalidParameter);
             }
-            image.write_with_encoder(JpegEncoder::new_with_quality(&mut buffer, jpeg_quality))?;
+            #[cfg(feature = "jpeg")]
+            image.write_with_encoder(image::codecs::jpeg::JpegEncoder::new_with_quality(
+                &mut buffer,
+                jpeg_quality,
+            ))?;
+            #[cfg(not(feature = "jpeg"))]
+            return Err(ImageErrorCode::UnsupportedFormat);
         }
         format => image.write_to(
             &mut std::io::Cursor::new(&mut buffer),
