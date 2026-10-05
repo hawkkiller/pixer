@@ -3,27 +3,27 @@
 
 const assetHashes = <String, String>{
   'libpixer_android_arm64.so':
-      '11589776f49ac5b4d5128395214cb280fcff6048574a787b1b7aac86c23eae14',
+      'c9d4b668ad891e4e15c991b244d626d9ee6c49b926426d05d412ac074d506776',
   'libpixer_android_armv7.so':
-      '36f2eb233ce651c337550d7b8799887924396932a59b3bd9c56536df4da01542',
+      '2e70d791fda0dd9a0e711e1989d81a41d8c4050ecf79a87c4dc3f54d874dfb91',
   'libpixer_android_x86_64.so':
-      'e3bc9267dac13c684d7fabc07da51f03a0992a42fd090f0e4459837c1009ee9d',
+      '14656bb4539e6c19d6370707b15e0dfa0b0f8f3fedfb592cd08c5f8cdec6b14c',
   'libpixer_ios_arm64.dylib':
-      '8aac2774640e92efe8b996e913c13f3265acd20ff1dffd998a432acd5e11bb2a',
+      'a5bf0d45943ffca912870bcf06968a344673cc0b29497139f3a84e25bebbba30',
   'libpixer_ios_sim_arm64.dylib':
-      'b8d0e39fcf8fc221ec1f224c815fade61f423a28666bcc7899a6aec1f608ef8d',
+      '6f27137f2c1026e35a83a0f1e323f0f27d9f692a3a9c6423eff7cd393bf703ad',
   'libpixer_ios_sim_x86_64.dylib':
-      'beee9e5aa0bb925b3ea57c50dde30a07f5b497fdbf769d36fb32acf30f7fe647',
+      '15b8ed44b09ae3251bcb2350725c3b5ee8d650bd4f870f3e3e009c5e682e62f8',
   'libpixer_linux_aarch64.so':
-      '7a4b32064c14fbb159d949d36bb0400275d55fa3967eaff168edfbe5f5d733b8',
+      '3498ec875102747f5e50d1473fed1aabb31c3d4066420b854791d554bb2b01ab',
   'libpixer_linux_x86_64.so':
-      '2f50a770f714ff158df5b62b93f614855bdf6dd1da84955c51fa492b391aed63',
+      '4c31844753bfdd579726098d7d5112788a4890f20ab2c1abaee0045e6d3d55fc',
   'libpixer_macos_arm64.dylib':
-      'f3058ea910b9ac4dcee22e59c21784da852e63913538239c0ab0cc2b9df7e6c1',
+      'f499b53122df2aafbd8adef65b07ce3be408c24a7aae89fa9ca61975dbd8c729',
   'libpixer_macos_x86_64.dylib':
-      '364c5f7690434a0e56c60cf75bcfae4d67cd2fb026123c62d6a628645b21899d',
+      'ef7477c71b9fdf05e0ebc0c9d6b18f263fa4d6a65183faf45a3678de58e943f5',
   'pixer_windows_arm64.dll':
-      'e66bf21b1db9481b04dc53c3092cbb163e1271640c2cdefc3ca7790cbcda3236',
+      '1932bb9df2fa03052be9e1c3fec98ad6f58a8b5a6201ba65e2aa5a190515d618',
   'pixer_windows_x86_64.dll':
-      '5fc3c9d0d91128e9fd6c94257e6b7d4595bc830e4c760f9dc35730309315ee1b',
+      '41acd502546aafc51de9935bea655e2e5ea8094b04aca6173746330d7b435752',
 };
