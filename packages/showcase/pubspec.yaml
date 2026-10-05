@@ -27,3 +27,6 @@ hooks:
   user_defines:
     pixer:
       local_build: true
+      formats:
+        - png
+        - jpeg

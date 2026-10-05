@@ -1,95 +1,43 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:benchmark_harness/benchmark_harness.dart';
+
 import '../lib/dart_image_benchmark.dart';
 import '../lib/pixer_benchmark.dart';
 
 void main() {
-  print('\n=== Image Processing Benchmarks ===\n');
-  print('Format: {benchmark_name}(RunTime): {time} us.\n');
+  final cases = <String, (BenchmarkBase, BenchmarkBase)>{
+    'resize_800x600': (PixerResizeBenchmark(800, 600), DartImageResizeBenchmark(800, 600)),
+    'resize_1280x720': (PixerResizeBenchmark(1280, 720), DartImageResizeBenchmark(1280, 720)),
+    'resize_3840x2160': (PixerResizeBenchmark(3840, 2160), DartImageResizeBenchmark(3840, 2160)),
+    'load': (PixerLoadBenchmark(), DartImageLoadBenchmark()),
+    'encode_jpeg': (PixerEncodeBenchmark(), DartImageEncodeBenchmark()),
+    'rotate_90': (PixerRotateBenchmark(), DartImageRotateBenchmark()),
+    'flip_horizontal': (PixerFlipBenchmark(), DartImageFlipBenchmark()),
+    'pipeline_4k': (PixerPipelineBenchmark(), DartImagePipelineBenchmark()),
+  };
 
-  final results = <String, Map<String, dynamic>>{};
-
-  // Resize benchmarks - various sizes
-  print('--- Resize Benchmarks ---');
-  final resizeSizes = [
-    (800, 600),
-    (1920, 1080),
-    (3840, 2160), // 4K
-  ];
-
-  for (final (width, height) in resizeSizes) {
-    final operation = 'resize_${width}x$height';
-    results[operation] = {};
-
-    final pixerTime = PixerResizeBenchmark(width, height).measure();
-    print('pixer.$operation(RunTime): $pixerTime us.');
-    results[operation]!['pixer_us'] = pixerTime;
-
-    final dartImageTime = DartImageResizeBenchmark(width, height).measure();
-    print('dart_image.$operation(RunTime): $dartImageTime us.');
-    results[operation]!['dart_image_us'] = dartImageTime;
-    print('');
+  print('Microseconds per operation\n');
+  print('${'operation'.padRight(18)}${'pixer'.padLeft(12)}${'image'.padLeft(14)}  speedup');
+  final results = <String, Map<String, double>>{};
+  for (final MapEntry(key: operation, value: (pixer, image)) in cases.entries) {
+    final pixerUs = pixer.measure();
+    final imageUs = image.measure();
+    results[operation] = {'pixer_us': pixerUs, 'dart_image_us': imageUs};
+    print(
+      '${operation.padRight(18)}'
+      '${pixerUs.toStringAsFixed(0).padLeft(12)}'
+      '${imageUs.toStringAsFixed(0).padLeft(14)}'
+      '  ${(imageUs / pixerUs).toStringAsFixed(1)}x',
+    );
   }
 
-  // Load benchmarks
-  print('--- Load Benchmarks ---');
-  results['load'] = {};
-
-  final pixerLoadTime = PixerLoadBenchmark().measure();
-  print('pixer.load(RunTime): $pixerLoadTime us.');
-  results['load']!['pixer_us'] = pixerLoadTime;
-
-  final dartImageLoadTime = DartImageLoadBenchmark().measure();
-  print('dart_image.load(RunTime): $dartImageLoadTime us.');
-  results['load']!['dart_image_us'] = dartImageLoadTime;
-  print('');
-
-  // Encode benchmarks
-  print('--- Encode Benchmarks ---');
-  results['encode_jpeg'] = {};
-
-  final pixerEncodeTime = PixerEncodeBenchmark().measure();
-  print('pixer.encode_jpeg(RunTime): $pixerEncodeTime us.');
-  results['encode_jpeg']!['pixer_us'] = pixerEncodeTime;
-
-  final dartImageEncodeTime = DartImageEncodeBenchmark().measure();
-  print('dart_image.encode_jpeg(RunTime): $dartImageEncodeTime us.');
-  results['encode_jpeg']!['dart_image_us'] = dartImageEncodeTime;
-  print('');
-
-  // Rotate benchmarks
-  print('--- Rotate Benchmarks ---');
-  results['rotate_90'] = {};
-
-  final pixerRotateTime = PixerRotateBenchmark().measure();
-  print('pixer.rotate_90(RunTime): $pixerRotateTime us.');
-  results['rotate_90']!['pixer_us'] = pixerRotateTime;
-
-  final dartImageRotateTime = DartImageRotateBenchmark().measure();
-  print('dart_image.rotate_90(RunTime): $dartImageRotateTime us.');
-  results['rotate_90']!['dart_image_us'] = dartImageRotateTime;
-  print('');
-
-  // Flip benchmarks
-  print('--- Flip Benchmarks ---');
-  results['flip_horizontal'] = {};
-
-  final pixerFlipTime = PixerFlipBenchmark().measure();
-  print('pixer.flip_horizontal(RunTime): $pixerFlipTime us.');
-  results['flip_horizontal']!['pixer_us'] = pixerFlipTime;
-
-  final dartImageFlipTime = DartImageFlipBenchmark().measure();
-  print('dart_image.flip_horizontal(RunTime): $dartImageFlipTime us.');
-  results['flip_horizontal']!['dart_image_us'] = dartImageFlipTime;
-  print('');
-
-  // Save results to JSON file
-  final jsonOutput = {'timestamp': DateTime.now().toIso8601String(), 'results': results};
-
   final file = File('benchmark_results.json');
-  file.writeAsStringSync(const JsonEncoder.withIndent('  ').convert(jsonOutput));
-
-  print('\n=== Benchmarks Complete ===');
-  print('Results saved to: ${file.absolute.path}\n');
+  file.writeAsStringSync(
+    const JsonEncoder.withIndent(
+      '  ',
+    ).convert({'timestamp': DateTime.now().toIso8601String(), 'results': results}),
+  );
+  print('\nResults saved to: ${file.absolute.path}');
 }

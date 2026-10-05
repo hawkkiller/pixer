@@ -1,11 +1,23 @@
-use image::{DynamicImage, ImageError, ImageFormat, imageops::FilterType};
-use std::{borrow::Cow, ffi::CStr, os::raw::c_char, path::Path, slice};
+use fast_image_resize as fir;
+use image::{
+    DynamicImage, ImageBuffer, ImageDecoder, ImageError, ImageFormat, ImageReader, Limits, Pixel,
+    imageops::FilterType, metadata::Orientation,
+};
+use std::{
+    borrow::Cow,
+    ffi::CStr,
+    io::{BufRead, Cursor, Seek},
+    os::raw::c_char,
+    path::Path,
+    slice,
+};
 
 #[cfg(target_arch = "wasm32")]
 use std::alloc::{Layout, alloc, dealloc};
 
 /// Result of every fallible Pixer function; outputs are written through
 /// out-parameters only on `Success`.
+#[derive(Debug)]
 #[repr(u32)]
 pub enum ImageErrorCode {
     /// The operation succeeded.
@@ -115,6 +127,17 @@ impl FilterTypeEnum {
             Self::CatmullRom => FilterType::CatmullRom,
             Self::Gaussian => FilterType::Gaussian,
             Self::Lanczos3 => FilterType::Lanczos3,
+        }
+    }
+
+    fn into_resize_alg(self) -> fir::ResizeAlg {
+        use fir::FilterType as F;
+        match self {
+            Self::Nearest => fir::ResizeAlg::Nearest,
+            Self::Triangle => fir::ResizeAlg::Convolution(F::Bilinear),
+            Self::CatmullRom => fir::ResizeAlg::Convolution(F::CatmullRom),
+            Self::Gaussian => fir::ResizeAlg::Convolution(F::Gaussian),
+            Self::Lanczos3 => fir::ResizeAlg::Convolution(F::Lanczos3),
         }
     }
 }
@@ -236,7 +259,7 @@ enum Op {
     Resize {
         width: u32,
         height: u32,
-        filter: FilterType,
+        filter: FilterTypeEnum,
         exact: bool,
     },
     Crop {
@@ -265,7 +288,7 @@ impl TryFrom<&PixerOperation> for Op {
             kind @ (PixerOperationKind::Resize | PixerOperationKind::ResizeExact) => Op::Resize {
                 width: slot_u32(op.arg0, false)?,
                 height: slot_u32(op.arg1, false)?,
-                filter: FilterTypeEnum::try_from(op.arg2)?.into_filter_type(),
+                filter: FilterTypeEnum::try_from(op.arg2)?,
                 exact: matches!(kind, PixerOperationKind::ResizeExact),
             },
             PixerOperationKind::Crop => Op::Crop {
@@ -308,9 +331,13 @@ impl Op {
                 exact,
             } => {
                 if exact {
-                    image.resize_exact(width, height, filter)
+                    resize_exact(image, width, height, filter)
+                } else if (width, height) == (image.width(), image.height()) {
+                    image.clone()
                 } else {
-                    image.resize(width, height, filter)
+                    let (width, height) =
+                        fit_dimensions(image.width(), image.height(), width, height);
+                    resize_exact(image, width, height, filter)
                 }
             }
             Op::Crop {
@@ -430,6 +457,79 @@ fn encode_image(
     Ok(buffer)
 }
 
+/// Largest size within `max_width` x `max_height` with the source aspect ratio,
+/// matching `image::DynamicImage::resize`.
+fn fit_dimensions(width: u32, height: u32, max_width: u32, max_height: u32) -> (u32, u32) {
+    let ratio = f64::min(
+        f64::from(max_width) / f64::from(width),
+        f64::from(max_height) / f64::from(height),
+    );
+    let scale = |side: u32| ((f64::from(side) * ratio).round() as u64).max(1);
+    let (new_width, new_height) = (scale(width), scale(height));
+    if new_width > u64::from(u32::MAX) {
+        let ratio = f64::from(u32::MAX) / f64::from(width);
+        (
+            u32::MAX,
+            ((f64::from(height) * ratio).round() as u32).max(1),
+        )
+    } else if new_height > u64::from(u32::MAX) {
+        let ratio = f64::from(u32::MAX) / f64::from(height);
+        (((f64::from(width) * ratio).round() as u32).max(1), u32::MAX)
+    } else {
+        (new_width as u32, new_height as u32)
+    }
+}
+
+fn resize_exact(
+    image: &DynamicImage,
+    width: u32,
+    height: u32,
+    filter: FilterTypeEnum,
+) -> DynamicImage {
+    use fir::pixels::{U8, U8x2, U8x3, U8x4};
+    let options = fir::ResizeOptions::new().resize_alg(filter.into_resize_alg());
+    // Only 8-bit layouts use the SIMD resizer; instantiating it for every
+    // layout would add megabytes to the binary for rarely used formats.
+    let resized = match image {
+        DynamicImage::ImageLuma8(buffer) => {
+            resize_buffer::<_, U8>(buffer, width, height, &options).map(DynamicImage::ImageLuma8)
+        }
+        DynamicImage::ImageLumaA8(buffer) => {
+            resize_buffer::<_, U8x2>(buffer, width, height, &options).map(DynamicImage::ImageLumaA8)
+        }
+        DynamicImage::ImageRgb8(buffer) => {
+            resize_buffer::<_, U8x3>(buffer, width, height, &options).map(DynamicImage::ImageRgb8)
+        }
+        DynamicImage::ImageRgba8(buffer) => {
+            resize_buffer::<_, U8x4>(buffer, width, height, &options).map(DynamicImage::ImageRgba8)
+        }
+        _ => None,
+    };
+    resized.unwrap_or_else(|| image.resize_exact(width, height, filter.into_filter_type()))
+}
+
+fn resize_buffer<Px, P>(
+    source: &ImageBuffer<Px, Vec<u8>>,
+    width: u32,
+    height: u32,
+    options: &fir::ResizeOptions,
+) -> Option<ImageBuffer<Px, Vec<u8>>>
+where
+    Px: Pixel<Subpixel = u8>,
+    P: fir::PixelTrait,
+{
+    let source_view =
+        fir::images::TypedImageRef::<P>::from_buffer(source.width(), source.height(), source)
+            .ok()?;
+    let mut resized = ImageBuffer::new(width, height);
+    let mut resized_view =
+        fir::images::TypedImage::<P>::from_buffer(width, height, &mut resized).ok()?;
+    fir::Resizer::new()
+        .resize_typed(&source_view, &mut resized_view, options)
+        .ok()?;
+    Some(resized)
+}
+
 fn slot_u32(value: i64, allow_zero: bool) -> Result<u32, ImageErrorCode> {
     let value = u32::try_from(value).map_err(|_| ImageErrorCode::InvalidDimensions)?;
     if !allow_zero && value == 0 {
@@ -501,6 +601,18 @@ fn run_batch(
             })
             .and_then(finish),
     )
+}
+
+/// Decodes under `image`'s default memory limits, then rotates or flips the
+/// pixels upright according to the EXIF orientation.
+fn decode<R: BufRead + Seek>(reader: ImageReader<R>) -> Result<DynamicImage, ImageErrorCode> {
+    let mut decoder = reader.into_decoder()?;
+    Limits::default().reserve(decoder.total_bytes())?;
+    // Malformed EXIF must not make otherwise valid pixels unreadable.
+    let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
+    let mut image = DynamicImage::from_decoder(decoder)?;
+    image.apply_orientation(orientation);
+    Ok(image)
 }
 
 fn load(
@@ -576,16 +688,18 @@ pub extern "C" fn pixer_free(handle: *mut ImageHandle) {
 // Loading & Information
 // ============================================================================
 
-/// Load an image from a file path into `out_image`.
+/// Load an image from a file path into `out_image`, applying its EXIF orientation.
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_load(
     path: *const c_char,
     out_image: *mut *mut ImageHandle,
 ) -> ImageErrorCode {
-    load(out_image, || Ok(image::open(c_path(path)?)?))
+    load(out_image, || {
+        decode(ImageReader::open(c_path(path)?).map_err(|_| ImageErrorCode::IoError)?)
+    })
 }
 
-/// Load an image from memory into `out_image`.
+/// Load an image from memory into `out_image`, applying its EXIF orientation.
 ///
 /// `format` is an `ImageFormatEnum` value, or `PIXER_FORMAT_DETECT`.
 #[unsafe(no_mangle)]
@@ -599,12 +713,16 @@ pub extern "C" fn pixer_load_from_memory(
         if data.is_null() || len == 0 {
             return Err(ImageErrorCode::InvalidPointer);
         }
-        let bytes = unsafe { slice::from_raw_parts(data, len) };
-        Ok(if format == PIXER_FORMAT_DETECT {
-            image::load_from_memory(bytes)?
+        let bytes = Cursor::new(unsafe { slice::from_raw_parts(data, len) });
+        decode(if format == PIXER_FORMAT_DETECT {
+            ImageReader::new(bytes)
+                .with_guessed_format()
+                .map_err(|_| ImageErrorCode::IoError)?
         } else {
-            let format = ImageFormatEnum::try_from(format)?.into_image_format();
-            image::load_from_memory_with_format(bytes, format)?
+            ImageReader::with_format(
+                bytes,
+                ImageFormatEnum::try_from(format)?.into_image_format(),
+            )
         })
     })
 }
@@ -727,6 +845,62 @@ mod tests {
                 Err(ImageErrorCode::InvalidParameter)
             ));
         }
+    }
+
+    #[test]
+    fn resize_matches_image_crate_dimensions() {
+        let images = [
+            DynamicImage::new_rgb8(192, 108),
+            DynamicImage::new_rgba8(7, 3),
+            DynamicImage::new_luma16(1000, 1),
+        ];
+        for image in &images {
+            for (width, height) in [(48, 32), (384, 216), (1, 1), (5, 10_000), (7, 3)] {
+                let op = Op::Resize {
+                    width,
+                    height,
+                    filter: FilterTypeEnum::Lanczos3,
+                    exact: false,
+                };
+                let resized = op.apply(image).unwrap();
+                let expected = image.resize(width, height, FilterType::Nearest);
+                assert_eq!(
+                    (resized.width(), resized.height(), resized.color()),
+                    (expected.width(), expected.height(), expected.color()),
+                    "{:?} {}x{} into {width}x{height}",
+                    image.color(),
+                    image.width(),
+                    image.height(),
+                );
+            }
+        }
+    }
+
+    #[cfg(feature = "jpeg")]
+    #[test]
+    fn load_applies_exif_orientation() {
+        use image::ImageEncoder;
+        // Little-endian TIFF with one IFD entry: Orientation (0x0112) = 6, rotate 90° clockwise.
+        let exif = vec![
+            b'I', b'I', 42, 0, 8, 0, 0, 0, // header, first IFD at offset 8
+            1, 0, // one entry
+            0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, // tag, SHORT, count 1, value 6
+            0, 0, 0, 0, // no next IFD
+        ];
+        let mut jpeg = Vec::new();
+        let mut encoder = image::codecs::jpeg::JpegEncoder::new(&mut jpeg);
+        encoder.set_exif_metadata(exif).unwrap();
+        encoder
+            .write_image(&[0; 4 * 2 * 3], 4, 2, image::ExtendedColorType::Rgb8)
+            .unwrap();
+
+        let mut handle = std::ptr::null_mut();
+        let code =
+            pixer_load_from_memory(jpeg.as_ptr(), jpeg.len(), PIXER_FORMAT_DETECT, &mut handle);
+        assert!(matches!(code, ImageErrorCode::Success), "{code:?}");
+        let image = image_ref(handle).unwrap();
+        assert_eq!((image.width(), image.height()), (2, 4));
+        pixer_free(handle);
     }
 
     #[test]

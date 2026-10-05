@@ -12,10 +12,7 @@ const _targetWidth = 3840;
 const _targetHeight = 2160;
 
 final _showcaseColors =
-    ColorScheme.fromSeed(
-      seedColor: const Color(0xffb44732),
-      brightness: Brightness.light,
-    ).copyWith(
+    ColorScheme.fromSeed(seedColor: const Color(0xffb44732), brightness: Brightness.light).copyWith(
       primary: const Color(0xffb44732),
       onPrimary: const Color(0xffffffff),
       surface: const Color(0xffffffff),
@@ -34,56 +31,34 @@ final _showcaseTheme = ThemeData(
   useMaterial3: true,
   colorScheme: _showcaseColors,
   scaffoldBackgroundColor: _showcaseColors.surface,
-  textTheme:
-      const TextTheme(
-        displaySmall: TextStyle(
-          fontSize: 42,
-          height: 1.05,
-          fontWeight: FontWeight.w600,
-          letterSpacing: -1.2,
-        ),
-        titleLarge: TextStyle(
-          fontSize: 20,
-          height: 1.2,
-          fontWeight: FontWeight.w600,
-        ),
-        titleMedium: TextStyle(
-          fontSize: 16,
-          height: 1.35,
-          fontWeight: FontWeight.w500,
-        ),
-        bodyLarge: TextStyle(fontSize: 16, height: 1.4),
-        bodyMedium: TextStyle(fontSize: 14, height: 1.35),
-        bodySmall: TextStyle(fontSize: 12, height: 1.35),
-        labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-        labelSmall: TextStyle(
-          fontSize: 10,
-          height: 1.2,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.1,
-        ),
-      ).apply(
-        bodyColor: _showcaseColors.onSurface,
-        displayColor: _showcaseColors.onSurface,
-      ),
-  dividerTheme: DividerThemeData(
-    color: _showcaseColors.outlineVariant,
-    thickness: 1,
-    space: 1,
-  ),
+  textTheme: const TextTheme(
+    displaySmall: TextStyle(
+      fontSize: 42,
+      height: 1.05,
+      fontWeight: FontWeight.w600,
+      letterSpacing: -1.2,
+    ),
+    titleLarge: TextStyle(fontSize: 20, height: 1.2, fontWeight: FontWeight.w600),
+    titleMedium: TextStyle(fontSize: 16, height: 1.35, fontWeight: FontWeight.w500),
+    bodyLarge: TextStyle(fontSize: 16, height: 1.4),
+    bodyMedium: TextStyle(fontSize: 14, height: 1.35),
+    bodySmall: TextStyle(fontSize: 12, height: 1.35),
+    labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+    labelSmall: TextStyle(
+      fontSize: 10,
+      height: 1.2,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 1.1,
+    ),
+  ).apply(bodyColor: _showcaseColors.onSurface, displayColor: _showcaseColors.onSurface),
+  dividerTheme: DividerThemeData(color: _showcaseColors.outlineVariant, thickness: 1, space: 1),
   filledButtonTheme: FilledButtonThemeData(
     style: ButtonStyle(
       elevation: const WidgetStatePropertyAll(0),
       minimumSize: const WidgetStatePropertyAll(Size(180, 52)),
-      padding: const WidgetStatePropertyAll(
-        EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      ),
-      shape: const WidgetStatePropertyAll(
-        RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-      ),
-      textStyle: const WidgetStatePropertyAll(
-        TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-      ),
+      padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 24, vertical: 16)),
+      shape: const WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.zero)),
+      textStyle: const WidgetStatePropertyAll(TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
     ),
   ),
   progressIndicatorTheme: ProgressIndicatorThemeData(
@@ -123,7 +98,7 @@ Future<_ProcessedImage> _upscaleWithImage(Uint8List bytes) async {
     height: _targetHeight,
     interpolation: image.Interpolation.cubic,
   );
-  final encoded = Uint8List.fromList(image.encodeJpg(result));
+  final encoded = Uint8List.fromList(image.encodeJpg(result, quality: 85));
   stopwatch.stop();
   return _ProcessedImage(encoded, stopwatch.elapsed);
 }
@@ -134,12 +109,8 @@ Future<_ProcessedImage> _upscaleWithPixer(Uint8List bytes) async {
   final source = Pixer.fromMemory(bytes);
   try {
     final encoded = source
-        .resizeExact(
-          _targetWidth,
-          _targetHeight,
-          filter: FilterTypeEnum.Lanczos3,
-        )
-        .encode(PixerJpegEncoder(quality: 100));
+        .resizeExact(_targetWidth, _targetHeight, filter: FilterTypeEnum.Lanczos3)
+        .encode(PixerJpegEncoder(quality: 85));
     stopwatch.stop();
     return _ProcessedImage(encoded, stopwatch.elapsed);
   } finally {
@@ -177,7 +148,15 @@ class _ShowcasePageState extends State<_ShowcasePage> {
     }
   }
 
-  Future<void> _run(_Engine engine, Uint8List source) async {
+  Future<void> _upscale(_Engine engine) async {
+    final source = _source;
+    if (source == null || _running.contains(engine)) return;
+    setState(() {
+      _running.add(engine);
+      _errors.remove(engine);
+    });
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
     try {
       final result = await compute(
         engine == _Engine.image ? _upscaleWithImage : _upscaleWithPixer,
@@ -189,20 +168,6 @@ class _ShowcasePageState extends State<_ShowcasePage> {
     } finally {
       if (mounted) setState(() => _running.remove(engine));
     }
-  }
-
-  Future<void> _upscale() async {
-    final source = _source;
-    if (source == null || _running.isNotEmpty) return;
-    setState(() {
-      _running.addAll(_Engine.values);
-      _errors.clear();
-    });
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) return;
-    await Future.wait([
-      for (final engine in _Engine.values) _run(engine, source),
-    ]);
   }
 
   @override
@@ -231,15 +196,14 @@ class _ShowcasePageState extends State<_ShowcasePage> {
                             result: _results[engine],
                             loading: _running.contains(engine),
                             error: _errors[engine],
+                            onUpscale: _source == null || _running.contains(engine)
+                                ? null
+                                : () => _upscale(engine),
                           ),
                       ];
                       if (constraints.maxWidth < 760) {
                         return Column(
-                          children: [
-                            cards.first,
-                            const SizedBox(height: 28),
-                            cards.last,
-                          ],
+                          children: [cards.first, const SizedBox(height: 28), cards.last],
                         );
                       }
                       return Row(
@@ -254,20 +218,8 @@ class _ShowcasePageState extends State<_ShowcasePage> {
                   ),
                   if (_loadError != null) ...[
                     const SizedBox(height: 16),
-                    Text(
-                      _loadError!,
-                      style: TextStyle(color: theme.colorScheme.error),
-                    ),
+                    Text(_loadError!, style: TextStyle(color: theme.colorScheme.error)),
                   ],
-                  const SizedBox(height: 32),
-                  FilledButton(
-                    onPressed: _source == null || _running.isNotEmpty
-                        ? null
-                        : _upscale,
-                    child: Text(
-                      _results.isEmpty ? 'Upscale images' : 'Upscale again',
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -285,6 +237,7 @@ class _ImageCard extends StatelessWidget {
     required this.result,
     required this.loading,
     required this.error,
+    required this.onUpscale,
   });
 
   final String title;
@@ -292,6 +245,7 @@ class _ImageCard extends StatelessWidget {
   final _ProcessedImage? result;
   final bool loading;
   final String? error;
+  final VoidCallback? onUpscale;
 
   @override
   Widget build(BuildContext context) {
@@ -326,9 +280,7 @@ class _ImageCard extends StatelessWidget {
                   ColoredBox(
                     color: colors.surface.withValues(alpha: 0.65),
                     child: Center(
-                      child: CircularProgressIndicator(
-                        semanticsLabel: 'Upscaling with $title',
-                      ),
+                      child: CircularProgressIndicator(semanticsLabel: 'Upscaling with $title'),
                     ),
                   ),
               ],
@@ -362,10 +314,7 @@ class _ImageCard extends StatelessWidget {
               ),
             ),
             const Expanded(
-              child: _Metric(
-                label: 'DIMENSIONS',
-                value: '$_targetWidth × $_targetHeight',
-              ),
+              child: _Metric(label: 'DIMENSIONS', value: '$_targetWidth × $_targetHeight'),
             ),
           ],
         ),
@@ -373,6 +322,11 @@ class _ImageCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(error!, style: TextStyle(color: colors.error)),
         ],
+        const SizedBox(height: 20),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FilledButton(onPressed: onUpscale, child: Text('Upscale with $title')),
+        ),
       ],
     );
   }
@@ -392,12 +346,7 @@ class _Metric extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: colors.onSurfaceVariant,
-          ),
-        ),
+        Text(label, style: theme.textTheme.labelSmall?.copyWith(color: colors.onSurfaceVariant)),
         const SizedBox(height: 4),
         FittedBox(
           fit: BoxFit.scaleDown,

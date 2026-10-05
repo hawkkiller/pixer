@@ -1,33 +1,37 @@
 {
-  "timestamp": "2026-05-17T12:02:41.789446",
+  "timestamp": "2026-10-04T14:42:11.500634",
   "results": {
     "resize_800x600": {
-      "pixer_us": 149562.0,
-      "dart_image_us": 3211790.5
+      "pixer_us": 1088.978,
+      "dart_image_us": 334703.0
     },
-    "resize_1920x1080": {
-      "pixer_us": 864.3605,
-      "dart_image_us": 4940.66
+    "resize_1280x720": {
+      "pixer_us": 1385.5449775112443,
+      "dart_image_us": 645133.5
     },
     "resize_3840x2160": {
-      "pixer_us": 903944.0,
-      "dart_image_us": 56847694.5
+      "pixer_us": 3485.7736131934034,
+      "dart_image_us": 5868944.0
     },
     "load": {
-      "pixer_us": 59612.76470588235,
-      "dart_image_us": 633168.5
+      "pixer_us": 6121.368131868132,
+      "dart_image_us": 65042.290322580644
     },
     "encode_jpeg": {
-      "pixer_us": 201714.36363636365,
-      "dart_image_us": 1211010.0
+      "pixer_us": 17383.29661016949,
+      "dart_image_us": 83549.52
     },
     "rotate_90": {
-      "pixer_us": 16463.352,
-      "dart_image_us": 305782.85714285716
+      "pixer_us": 1266.2665,
+      "dart_image_us": 30430.582089552237
     },
     "flip_horizontal": {
-      "pixer_us": 13892.496644295303,
-      "dart_image_us": 377647.0
+      "pixer_us": 1372.713,
+      "dart_image_us": 36904.03636363636
+    },
+    "pipeline_4k": {
+      "pixer_us": 63010.9375,
+      "dart_image_us": 6260710.0
     }
   }
 }

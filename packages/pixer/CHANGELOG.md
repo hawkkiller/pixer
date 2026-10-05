@@ -1,7 +1,10 @@
-## Unreleased
+## 0.0.12
 
 - Native binaries no longer include image codecs outside the supported formats (AVIF, EXR, HDR, QOI, TGA, DDS, PNM, Farbfeld), shrinking them by roughly 60% (macOS arm64: 4.9 MB to 1.8 MB). Auto-detected loading of those formats now throws `UnsupportedFormatException`.
 - Added the `formats` hook user define to compile in only selected formats. Setting it builds the native library from source and requires a Rust toolchain.
+- Resizing 8-bit images is 10–15x faster on native platforms: it now uses SIMD and splits large images across CPU cores (Apple M-series: 4K Lanczos3 upscale from 90 ms to 7 ms). 16-bit and floating-point images use the previous resizer.
+- Resizing images with alpha now premultiplies alpha, so transparent pixels no longer bleed color into edges. Resized pixel values differ slightly from previous versions.
+- **Breaking:** Loaded images are now rotated and flipped upright according to their EXIF orientation, so `width` and `height` are swapped for photos taken in portrait orientation. Malformed EXIF data is ignored.
 
 ## 0.0.11
 
