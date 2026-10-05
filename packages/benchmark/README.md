@@ -1,6 +1,6 @@
 # Benchmarks
 
-Comprehensive benchmarks comparing `pixer` (Rust-backed) with the pure Dart `image` package.
+Compares `pixer` (Rust-backed) with the pure Dart `image` package.
 
 ## Running Benchmarks
 
@@ -8,35 +8,32 @@ Comprehensive benchmarks comparing `pixer` (Rust-backed) with the pure Dart `ima
 dart run bin/main.dart
 ```
 
+Results are printed and saved to `benchmark_results.json`.
+
 ## Benchmark Results
 
-_Last updated: May 17, 2026_
+![pixer vs image benchmark](chart.png)
 
-| Operation            | pixer (μs) | image (μs) | Speedup   |
-| -------------------- | ---------- | ---------- | --------- |
-| **Resize 800x600**   | 149,562    | 3,211,790  | **21.5x** |
-| **Resize 1920x1080** | 864        | 4,941      | **5.7x**  |
-| **Resize 3840x2160** | 903,944    | 56,847,694 | **62.9x** |
-| **Load**             | 59,613     | 633,168    | **10.6x** |
-| **Encode JPEG**      | 201,714    | 1,211,010  | **6.0x**  |
-| **Rotate 90°**       | 16,463     | 305,783    | **18.6x** |
-| **Flip Horizontal**  | 13,892     | 377,647    | **27.2x** |
+_Last updated: October 4, 2026. Apple M4 Pro (12 cores), Dart 3.13.0, pixer built from source._
 
-Note: Image given as input for all operations is a Full HD (1920x1080) JPEG image.
+Times are per operation, in milliseconds.
 
-### Key Findings
+| Operation                         | pixer | image   | Speedup   |
+| --------------------------------- | ----- | ------- | --------- |
+| **Resize to 800x600**             | 1.1   | 334.7   | **307x**  |
+| **Resize to 1280x720**            | 1.4   | 645.1   | **466x**  |
+| **Resize to 3840x2160**           | 3.5   | 5,868.9 | **1684x** |
+| **Load (decode JPEG)**            | 6.1   | 65.0    | **10.6x** |
+| **Encode JPEG (quality 85)**      | 17.4  | 83.6    | **4.8x**  |
+| **Rotate 90°**                    | 1.3   | 30.4    | **24.0x** |
+| **Flip Horizontal**               | 1.4   | 36.9    | **26.9x** |
+| **Decode, upscale to 4K, encode** | 63.0  | 6,260.7 | **99.4x** |
 
-- **Massive 4K Performance**: `pixer` is **62.9x faster** at resizing 4K images
-- **Consistent Advantages**: Speedups range from 5.7x to 62.9x across all operations
-- **Memory Efficient**: Rust-backed implementation with proper resource management
-- **Production Ready**: Significant performance gains for real-world image processing tasks
+The input is a Full HD (1920x1080) JPEG decoded from memory. Resizes produce exact dimensions with a
+cubic filter in both libraries (`FilterTypeEnum.CatmullRom` and `Interpolation.cubic`).
 
-## Expected Results
+### Notes
 
-`pixer` should demonstrate significant performance advantages, especially for:
-
-- Large image resizing (4K)
-- Encoding operations
-- Batch transformations
-
-The Rust-backed implementation typically shows 5-60x performance improvements depending on the operation.
+- Resize gains come from SIMD and from splitting large images across CPU cores.
+- Load and encode are bound by the JPEG codecs, so gains there are smaller.
+- Numbers depend on the CPU and core count, so rerun on your target hardware.

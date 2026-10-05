@@ -26,6 +26,10 @@ pub.dev publishing uses GitHub OIDC; the package admin page must allow `hawkkill
 - Do not modify entries for already released versions. A version heading like `## 0.0.4` means that version is released.
 - Put new changes under `## Unreleased`. If there is no `Unreleased` section, add one above the latest version.
 
+## Research
+
+Record performance and binary-size experiments (what was tried, numbers, decision) in `native/RESEARCH.md`. Keep entries short and check it before re-running an investigation.
+
 ## Architecture
 
 - Rust code in `native/src/`: `lib.rs` (entry), `api.rs` (image ops), `ffi.rs` (C-compatible API)

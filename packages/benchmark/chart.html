@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pixer vs image</title>
+    <style>
+      body {
+        margin: 0;
+        width: 1200px;
+        height: 675px;
+        background: #faf9f5;
+        font-family: "Styrene B", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      text {
+        font-variant-numeric: tabular-nums;
+      }
+    </style>
+  </head>
+  <body>
+    <svg id="chart" width="1200" height="675" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <script>
+      // Milliseconds per operation, from benchmark_results.json.
+      const data = [
+        ["Full pipeline", 63.01, 6260.71],
+        ["Upscale to 4K", 3.486, 5868.94],
+        ["Resize to 1280×720", 1.3855, 645.13],
+        ["Resize to 800×600", 1.089, 334.7],
+        ["Flip horizontal", 1.373, 36.9],
+        ["Rotate 90°", 1.266, 30.43],
+        ["Decode JPEG", 6.121, 65.04],
+        ["Encode JPEG", 17.38, 83.55],
+      ];
+
+      const W = 1200, H = 675, pad = 48;
+      const c = {
+        bg: "#faf9f5",
+        ink: "#141413",
+        dim: "#6b6a65",
+        grid: "#e3e0d8",
+        frame: "#1f1e1d",
+        pixer: "#d97757",
+        pixerText: "#c2603f",
+        image: "#d1cfc8",
+        link: "#c4c1b9",
+      };
+      const plot = { left: 260, right: 1050, top: 160, bottom: 570 };
+      const domain = [0.5, 10000];
+      const ticks = [[1, "1 ms"], [10, "10 ms"], [100, "100 ms"], [1000, "1 s"], [10000, "10 s"]];
+      const rowH = (plot.bottom - plot.top) / data.length;
+
+      const x = (ms) =>
+        plot.left + (Math.log10(ms / domain[0]) / Math.log10(domain[1] / domain[0])) * (plot.right - plot.left);
+      const fmt = (ms) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : ms >= 10 ? `${ms.toFixed(0)} ms` : `${ms.toFixed(1)} ms`);
+      const speedup = (v) => (v >= 100 ? Math.round(v).toLocaleString("en") : v.toFixed(1)) + "×";
+
+      const el = [`<rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" fill="${c.bg}" stroke="${c.frame}"/>`];
+      const text = (tx, ty, s, attrs = "") => el.push(`<text x="${tx}" y="${ty}" ${attrs}>${s}</text>`);
+      const line = (x1, y1, x2, y2, stroke, width = 1) =>
+        el.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="${width}"/>`);
+      const dot = (cx, cy, fill) =>
+        el.push(`<circle cx="${cx}" cy="${cy}" r="9" fill="${fill}" stroke="${c.frame}" stroke-width="1.2"/>`);
+
+      text(pad, 66, "Pixer vs image", `font-size="22" font-weight="600" fill="${c.ink}"`);
+      text(W - pad, 66, "Time per operation, lower is better", `font-size="17" fill="${c.dim}" text-anchor="end"`);
+
+      const svg = document.getElementById("chart");
+      const textWidth = (s, attrs) => {
+        svg.innerHTML = `<text ${attrs}>${s}</text>`;
+        return svg.firstChild.getComputedTextLength();
+      };
+      const legendAttrs = `font-size="16" font-weight="600" fill="${c.ink}"`;
+      let legendRight = W - pad;
+      [["image", c.image], ["Pixer", c.pixer]].forEach(([name, fill]) => {
+        const labelX = legendRight - textWidth(name, legendAttrs);
+        dot(labelX - 18, 108, fill);
+        text(labelX, 114, name, legendAttrs);
+        legendRight = labelX - 18 - 9 - 28;
+      });
+
+      ticks.forEach(([ms, label]) => {
+        line(x(ms), plot.top, x(ms), plot.bottom, c.grid);
+        text(x(ms), plot.bottom + 28, label, `font-size="14" fill="${c.dim}" text-anchor="middle"`);
+      });
+      text((plot.left + plot.right) / 2, plot.bottom + 64, "Time per operation (log scale)", `font-size="16" fill="${c.ink}" text-anchor="middle"`);
+      text(W - pad, plot.top - 4, "Faster by", `font-size="13" fill="${c.dim}" text-anchor="end"`);
+
+      data.forEach(([label, pixer, image], i) => {
+        const cy = plot.top + rowH * (i + 0.5);
+        line(plot.left, cy, plot.right, cy, c.grid);
+        text(pad, cy + 5, label, `font-size="16" font-weight="500" fill="${c.ink}"`);
+        line(x(pixer), cy, x(image), cy, c.link, 3);
+        [[pixer, c.pixer], [image, c.image]].forEach(([ms, fill]) => {
+          dot(x(ms), cy, fill);
+          text(x(ms), cy - 16, fmt(ms), `font-size="13" fill="${c.ink}" text-anchor="middle"`);
+        });
+        text(W - pad, cy + 6, speedup(image / pixer), `font-size="17" font-weight="600" fill="${c.pixerText}" text-anchor="end"`);
+      });
+
+      line(plot.left, plot.top, plot.left, plot.bottom, c.frame);
+      line(plot.left, plot.bottom, plot.right, plot.bottom, c.frame);
+
+      svg.innerHTML = el.join("");
+    </script>
+  </body>
+</html>

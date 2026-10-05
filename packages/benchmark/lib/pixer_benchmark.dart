@@ -1,117 +1,81 @@
+import 'dart:io';
+
 import 'package:benchmark_harness/benchmark_harness.dart';
 import 'package:pixer/pixer.dart';
 
-/// Benchmark for resizing images using the pixer package
-class PixerResizeBenchmark extends BenchmarkBase {
+import 'single_run.dart';
+
+final _bytes = File('assets/example_img.jpg').readAsBytesSync();
+
+/// Base for benchmarks that operate on an already decoded image.
+abstract class _PixerImageBenchmark extends BenchmarkBase with SingleRun {
+  _PixerImageBenchmark(super.name);
+
+  late Pixer image;
+
+  @override
+  void setup() => image = Pixer.fromMemory(_bytes);
+
+  @override
+  void teardown() => image.dispose();
+}
+
+/// Resizes to exact dimensions with a cubic filter, matching `image`'s `Interpolation.cubic`.
+class PixerResizeBenchmark extends _PixerImageBenchmark {
   PixerResizeBenchmark(this.targetWidth, this.targetHeight)
     : super('pixer.resize_${targetWidth}x$targetHeight');
 
   final int targetWidth;
   final int targetHeight;
-  late Pixer image;
 
   @override
-  void setup() {
-    super.setup();
-    image = Pixer.fromFile('assets/example_img.jpg');
-  }
-
-  @override
-  void teardown() {
-    super.teardown();
-    image.dispose();
-  }
-
-  @override
-  void run() {
-    final resized = image
-        .resize(targetWidth, targetHeight, filter: FilterTypeEnum.Lanczos3)
-        .toImage();
-    resized.dispose();
-  }
+  void run() => image
+      .resizeExact(targetWidth, targetHeight, filter: FilterTypeEnum.CatmullRom)
+      .toImage()
+      .dispose();
 }
 
-/// Benchmark for loading images using the pixer package
-class PixerLoadBenchmark extends BenchmarkBase {
+class PixerLoadBenchmark extends BenchmarkBase with SingleRun {
   PixerLoadBenchmark() : super('pixer.load');
 
   @override
-  void run() {
-    final image = Pixer.fromFile('assets/example_img.jpg');
-    image.dispose();
-  }
+  void run() => Pixer.fromMemory(_bytes).dispose();
 }
 
-/// Benchmark for encoding images using the pixer package
-class PixerEncodeBenchmark extends BenchmarkBase {
+class PixerEncodeBenchmark extends _PixerImageBenchmark {
   PixerEncodeBenchmark() : super('pixer.encode_jpeg');
 
-  late Pixer image;
-
   @override
-  void setup() {
-    super.setup();
-    image = Pixer.fromFile('assets/example_img.jpg');
-  }
-
-  @override
-  void teardown() {
-    super.teardown();
-    image.dispose();
-  }
-
-  @override
-  void run() {
-    image.encode(PixerJpegEncoder(quality: 100));
-  }
+  void run() => image.encode(PixerJpegEncoder(quality: 85));
 }
 
-/// Benchmark for rotating images using the pixer package
-class PixerRotateBenchmark extends BenchmarkBase {
+class PixerRotateBenchmark extends _PixerImageBenchmark {
   PixerRotateBenchmark() : super('pixer.rotate_90');
 
-  late Pixer image;
-
   @override
-  void setup() {
-    super.setup();
-    image = Pixer.fromFile('assets/example_img.jpg');
-  }
-
-  @override
-  void teardown() {
-    super.teardown();
-    image.dispose();
-  }
-
-  @override
-  void run() {
-    final rotated = image.rotate90().toImage();
-    rotated.dispose();
-  }
+  void run() => image.rotate90().toImage().dispose();
 }
 
-/// Benchmark for flipping images using the pixer package
-class PixerFlipBenchmark extends BenchmarkBase {
+class PixerFlipBenchmark extends _PixerImageBenchmark {
   PixerFlipBenchmark() : super('pixer.flip_horizontal');
 
-  late Pixer image;
-
   @override
-  void setup() {
-    super.setup();
-    image = Pixer.fromFile('assets/example_img.jpg');
-  }
+  void run() => image.flipHorizontal().toImage().dispose();
+}
 
-  @override
-  void teardown() {
-    super.teardown();
-    image.dispose();
-  }
+/// Decode, upscale to 4K, and encode, as in the showcase app.
+class PixerPipelineBenchmark extends BenchmarkBase with SingleRun {
+  PixerPipelineBenchmark() : super('pixer.pipeline_4k');
 
   @override
   void run() {
-    final flipped = image.flipHorizontal().toImage();
-    flipped.dispose();
+    final image = Pixer.fromMemory(_bytes);
+    try {
+      image
+          .resizeExact(3840, 2160, filter: FilterTypeEnum.CatmullRom)
+          .encode(PixerJpegEncoder(quality: 85));
+    } finally {
+      image.dispose();
+    }
   }
 }
