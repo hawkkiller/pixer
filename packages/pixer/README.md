@@ -16,7 +16,17 @@ checks this before loading images (or during `initialize`) and throws a
 `StateError` for missing or incompatible ABI versions. Rebuild or download the
 matching binary when upgrading; replace any cached `pixer.wasm` as well.
 
-### WebAssembly
+## Quick Start
+
+```dart
+import 'package:pixer/pixer.dart';
+
+final image = Pixer.fromFile('input.jpg');
+image.resize(800, 600).grayscale().saveToFile('output.png');
+image.dispose();
+```
+
+## WebAssembly
 
 Download `pixer.wasm` from the matching GitHub release into your app's web
 root, then initialize Pixer before loading images:
@@ -36,16 +46,6 @@ dart packages/pixer/tool/build_wasm.dart web/pixer.wasm
 Browser builds support the byte-based API. `fromFile` and `saveToFile` throw
 `UnsupportedError`; use `fromMemory` and `encode` instead. The web implementation is compatible with both `dart2js`
 and Dart/Flutter Wasm builds.
-
-## Quick Start
-
-```dart
-import 'package:pixer/pixer.dart';
-
-final image = Pixer.fromFile('input.jpg');
-image.resize(800, 600).grayscale().saveToFile('output.png');
-image.dispose();
-```
 
 ## Loading Images
 
