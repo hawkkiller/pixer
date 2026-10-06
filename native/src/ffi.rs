@@ -6,7 +6,8 @@ use image::{
 use std::{
     borrow::Cow,
     ffi::CStr,
-    io::{BufRead, Cursor, Seek},
+    fs::File,
+    io::{BufRead, BufReader, Cursor, Seek},
     os::raw::c_char,
     path::Path,
     slice,
@@ -65,6 +66,19 @@ pub enum ImageFormatEnum {
 }
 
 impl ImageFormatEnum {
+    fn from_image_format(format: ImageFormat) -> Option<Self> {
+        Some(match format {
+            ImageFormat::Png => Self::Png,
+            ImageFormat::Jpeg => Self::Jpeg,
+            ImageFormat::Gif => Self::Gif,
+            ImageFormat::WebP => Self::WebP,
+            ImageFormat::Bmp => Self::Bmp,
+            ImageFormat::Ico => Self::Ico,
+            ImageFormat::Tiff => Self::Tiff,
+            _ => return None,
+        })
+    }
+
     fn into_image_format(self) -> ImageFormat {
         match self {
             Self::Png => ImageFormat::Png,
@@ -99,6 +113,10 @@ impl TryFrom<u32> for ImageFormatEnum {
 
 /// Pass as the `format` of `pixer_load_from_memory` to detect it from the bytes.
 pub const PIXER_FORMAT_DETECT: u32 = 0xFFFF_FFFF;
+
+/// `ImageMetadata::format` of an image whose container format is unknown, such
+/// as a decoded handle.
+pub const PIXER_FORMAT_UNKNOWN: u32 = 0xFFFF_FFFF;
 
 /// Sampling filter used when resizing.
 ///
@@ -169,6 +187,8 @@ pub struct ImageMetadata {
     pub width: u32,
     pub height: u32,
     pub color_type: u8,
+    /// `ImageFormatEnum` value, or `PIXER_FORMAT_UNKNOWN`.
+    pub format: u32,
 }
 
 /// One operation in a batch. Arguments are interpreted according to `kind`.
@@ -187,10 +207,11 @@ pub struct PixerOperation {
 const _: () = {
     use std::mem::{align_of, offset_of, size_of};
     assert!(size_of::<usize>() == 4);
-    assert!(size_of::<ImageMetadata>() == 12);
+    assert!(size_of::<ImageMetadata>() == 16);
     assert!(offset_of!(ImageMetadata, width) == 0);
     assert!(offset_of!(ImageMetadata, height) == 4);
     assert!(offset_of!(ImageMetadata, color_type) == 8);
+    assert!(offset_of!(ImageMetadata, format) == 12);
     assert!(size_of::<PixerOperation>() == 48);
     assert!(align_of::<PixerOperation>() == 8);
     assert!(offset_of!(PixerOperation, kind) == 0);
@@ -415,18 +436,22 @@ fn c_path<'a>(ptr: *const c_char) -> Result<&'a Path, ImageErrorCode> {
         .map_err(|_| ImageErrorCode::InvalidPath)
 }
 
-fn get_metadata(img: &DynamicImage) -> ImageMetadata {
+fn color_type_code(color: image::ColorType) -> u8 {
     use image::ColorType::*;
-    let color_type = match img.color() {
+    match color {
         L8 | L16 => 0,
         La8 | La16 => 1,
         Rgb8 | Rgb16 | Rgb32F => 2,
         _ => 3,
-    };
+    }
+}
+
+fn get_metadata(img: &DynamicImage) -> ImageMetadata {
     ImageMetadata {
         width: img.width(),
         height: img.height(),
-        color_type,
+        color_type: color_type_code(img.color()),
+        format: PIXER_FORMAT_UNKNOWN,
     }
 }
 
@@ -615,6 +640,68 @@ fn decode<R: BufRead + Seek>(reader: ImageReader<R>) -> Result<DynamicImage, Ima
     Ok(image)
 }
 
+/// Reads what `decode` would produce without decoding pixels: dimensions after
+/// the EXIF orientation, color layout, and the container format.
+fn probe<R: BufRead + Seek>(reader: ImageReader<R>) -> Result<ImageMetadata, ImageErrorCode> {
+    let format = reader
+        .format()
+        .and_then(ImageFormatEnum::from_image_format)
+        .ok_or(ImageErrorCode::UnsupportedFormat)?;
+    let mut decoder = reader.into_decoder()?;
+    let (width, height) = decoder.dimensions();
+    let color_type = color_type_code(decoder.color_type());
+    let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
+    let (width, height) = match orientation {
+        Orientation::Rotate90
+        | Orientation::Rotate270
+        | Orientation::Rotate90FlipH
+        | Orientation::Rotate270FlipH => (height, width),
+        _ => (width, height),
+    };
+    Ok(ImageMetadata {
+        width,
+        height,
+        color_type,
+        format: format as u32,
+    })
+}
+
+fn file_reader(path: *const c_char) -> Result<ImageReader<BufReader<File>>, ImageErrorCode> {
+    ImageReader::open(c_path(path)?).map_err(|_| ImageErrorCode::IoError)
+}
+
+/// `format` is an `ImageFormatEnum` value, or `PIXER_FORMAT_DETECT`.
+fn memory_reader<'a>(
+    data: *const u8,
+    len: usize,
+    format: u32,
+) -> Result<ImageReader<Cursor<&'a [u8]>>, ImageErrorCode> {
+    if data.is_null() || len == 0 {
+        return Err(ImageErrorCode::InvalidPointer);
+    }
+    let bytes = Cursor::new(unsafe { slice::from_raw_parts(data, len) });
+    if format == PIXER_FORMAT_DETECT {
+        ImageReader::new(bytes)
+            .with_guessed_format()
+            .map_err(|_| ImageErrorCode::IoError)
+    } else {
+        Ok(ImageReader::with_format(
+            bytes,
+            ImageFormatEnum::try_from(format)?.into_image_format(),
+        ))
+    }
+}
+
+fn write_metadata(
+    out_metadata: *mut ImageMetadata,
+    metadata: impl FnOnce() -> Result<ImageMetadata, ImageErrorCode>,
+) -> ImageErrorCode {
+    let Some(out) = (unsafe { out_metadata.as_mut() }) else {
+        return ImageErrorCode::InvalidPointer;
+    };
+    status(metadata().map(|metadata| *out = metadata))
+}
+
 fn load(
     out_image: *mut *mut ImageHandle,
     decode: impl FnOnce() -> Result<DynamicImage, ImageErrorCode>,
@@ -633,7 +720,7 @@ fn load(
 /// ABI contract version. Increment for incompatible signatures, layouts, or IDs.
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_abi_version() -> u32 {
-    2
+    3
 }
 
 /// Pixel-buffer byte length for native memory accounting; zero for a null handle.
@@ -694,9 +781,7 @@ pub extern "C" fn pixer_load(
     path: *const c_char,
     out_image: *mut *mut ImageHandle,
 ) -> ImageErrorCode {
-    load(out_image, || {
-        decode(ImageReader::open(c_path(path)?).map_err(|_| ImageErrorCode::IoError)?)
-    })
+    load(out_image, || decode(file_reader(path)?))
 }
 
 /// Load an image from memory into `out_image`, applying its EXIF orientation.
@@ -709,38 +794,45 @@ pub extern "C" fn pixer_load_from_memory(
     format: u32,
     out_image: *mut *mut ImageHandle,
 ) -> ImageErrorCode {
-    load(out_image, || {
-        if data.is_null() || len == 0 {
-            return Err(ImageErrorCode::InvalidPointer);
-        }
-        let bytes = Cursor::new(unsafe { slice::from_raw_parts(data, len) });
-        decode(if format == PIXER_FORMAT_DETECT {
-            ImageReader::new(bytes)
-                .with_guessed_format()
-                .map_err(|_| ImageErrorCode::IoError)?
-        } else {
-            ImageReader::with_format(
-                bytes,
-                ImageFormatEnum::try_from(format)?.into_image_format(),
-            )
-        })
-    })
+    load(out_image, || decode(memory_reader(data, len, format)?))
 }
 
-/// Get image metadata
+/// Read a file's metadata into `out_metadata` without decoding pixels.
+/// Width and height account for the EXIF orientation, as after `pixer_load`.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixer_probe(
+    path: *const c_char,
+    out_metadata: *mut ImageMetadata,
+) -> ImageErrorCode {
+    write_metadata(out_metadata, || probe(file_reader(path)?))
+}
+
+/// Read encoded image metadata into `out_metadata` without decoding pixels.
+/// Width and height account for the EXIF orientation, as after
+/// `pixer_load_from_memory`.
+///
+/// `format` is an `ImageFormatEnum` value, or `PIXER_FORMAT_DETECT`.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixer_probe_from_memory(
+    data: *const u8,
+    len: usize,
+    format: u32,
+    out_metadata: *mut ImageMetadata,
+) -> ImageErrorCode {
+    write_metadata(out_metadata, || probe(memory_reader(data, len, format)?))
+}
+
+/// Get image metadata. `format` is always `PIXER_FORMAT_UNKNOWN`.
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_get_metadata(
     handle: *const ImageHandle,
     out_metadata: *mut ImageMetadata,
 ) -> ImageErrorCode {
-    let Some(out) = (unsafe { out_metadata.as_mut() }) else {
-        return ImageErrorCode::InvalidPointer;
-    };
-    let Some(image) = image_ref(handle) else {
-        return ImageErrorCode::InvalidPointer;
-    };
-    *out = get_metadata(image);
-    ImageErrorCode::Success
+    write_metadata(out_metadata, || {
+        image_ref(handle)
+            .map(get_metadata)
+            .ok_or(ImageErrorCode::InvalidPointer)
+    })
 }
 
 // ============================================================================
@@ -876,9 +968,9 @@ mod tests {
         }
     }
 
+    /// A 4x2 RGB JPEG whose EXIF orientation rotates it 90° clockwise.
     #[cfg(feature = "jpeg")]
-    #[test]
-    fn load_applies_exif_orientation() {
+    fn rotated_jpeg() -> Vec<u8> {
         use image::ImageEncoder;
         // Little-endian TIFF with one IFD entry: Orientation (0x0112) = 6, rotate 90° clockwise.
         let exif = vec![
@@ -893,7 +985,13 @@ mod tests {
         encoder
             .write_image(&[0; 4 * 2 * 3], 4, 2, image::ExtendedColorType::Rgb8)
             .unwrap();
+        jpeg
+    }
 
+    #[cfg(feature = "jpeg")]
+    #[test]
+    fn load_applies_exif_orientation() {
+        let jpeg = rotated_jpeg();
         let mut handle = std::ptr::null_mut();
         let code =
             pixer_load_from_memory(jpeg.as_ptr(), jpeg.len(), PIXER_FORMAT_DETECT, &mut handle);
@@ -901,6 +999,59 @@ mod tests {
         let image = image_ref(handle).unwrap();
         assert_eq!((image.width(), image.height()), (2, 4));
         pixer_free(handle);
+    }
+
+    #[cfg(feature = "jpeg")]
+    #[test]
+    fn probe_matches_load_without_decoding() {
+        let jpeg = rotated_jpeg();
+        let mut metadata = ImageMetadata {
+            width: 0,
+            height: 0,
+            color_type: 0,
+            format: 0,
+        };
+        let code = pixer_probe_from_memory(
+            jpeg.as_ptr(),
+            jpeg.len(),
+            PIXER_FORMAT_DETECT,
+            &mut metadata,
+        );
+        assert!(matches!(code, ImageErrorCode::Success), "{code:?}");
+        assert_eq!(
+            (
+                metadata.width,
+                metadata.height,
+                metadata.color_type,
+                metadata.format
+            ),
+            (2, 4, 2, ImageFormatEnum::Jpeg as u32)
+        );
+
+        // A 60000x40000 header is over the decode memory limit, so loading
+        // fails while probing never allocates pixels.
+        let mut large = jpeg.clone();
+        let sof = large.windows(2).position(|w| w == [0xFF, 0xC0]).unwrap();
+        large[sof + 5..sof + 9].copy_from_slice(&[0x9C, 0x40, 0xEA, 0x60]); // height, width
+        let mut handle = std::ptr::null_mut();
+        let code = pixer_load_from_memory(
+            large.as_ptr(),
+            large.len(),
+            PIXER_FORMAT_DETECT,
+            &mut handle,
+        );
+        assert!(
+            matches!(code, ImageErrorCode::InvalidDimensions),
+            "{code:?}"
+        );
+        let code = pixer_probe_from_memory(
+            large.as_ptr(),
+            large.len(),
+            PIXER_FORMAT_DETECT,
+            &mut metadata,
+        );
+        assert!(matches!(code, ImageErrorCode::Success), "{code:?}");
+        assert_eq!((metadata.width, metadata.height), (40_000, 60_000));
     }
 
     #[test]

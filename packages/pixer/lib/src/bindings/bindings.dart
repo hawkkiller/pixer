@@ -26,7 +26,7 @@ external void pixer_free_buffer(ffi.Pointer<ffi.Uint8> ptr, int len);
 @ffi.Native<ffi.Void Function(ffi.Pointer<ImageHandle>)>(isLeaf: true)
 external void pixer_free(ffi.Pointer<ImageHandle> handle);
 
-/// Load an image from a file path into `out_image`.
+/// Load an image from a file path into `out_image`, applying its EXIF orientation.
 @ffi.Native<
   ImageErrorCode$1 Function(
     ffi.Pointer<ffi.Char>,
@@ -38,7 +38,7 @@ external int pixer_load(
   ffi.Pointer<ffi.Pointer<ImageHandle>> out_image,
 );
 
-/// Load an image from memory into `out_image`.
+/// Load an image from memory into `out_image`, applying its EXIF orientation.
 ///
 /// `format` is an `ImageFormatEnum` value, or `PIXER_FORMAT_DETECT`.
 @ffi.Native<
@@ -56,7 +56,37 @@ external int pixer_load_from_memory(
   ffi.Pointer<ffi.Pointer<ImageHandle>> out_image,
 );
 
-/// Get image metadata
+/// Read a file's metadata into `out_metadata` without decoding pixels.
+/// Width and height account for the EXIF orientation, as after `pixer_load`.
+@ffi.Native<
+  ImageErrorCode$1 Function(ffi.Pointer<ffi.Char>, ffi.Pointer<ImageMetadata>)
+>()
+external int pixer_probe(
+  ffi.Pointer<ffi.Char> path,
+  ffi.Pointer<ImageMetadata> out_metadata,
+);
+
+/// Read encoded image metadata into `out_metadata` without decoding pixels.
+/// Width and height account for the EXIF orientation, as after
+/// `pixer_load_from_memory`.
+///
+/// `format` is an `ImageFormatEnum` value, or `PIXER_FORMAT_DETECT`.
+@ffi.Native<
+  ImageErrorCode$1 Function(
+    ffi.Pointer<ffi.Uint8>,
+    ffi.UintPtr,
+    ffi.Uint32,
+    ffi.Pointer<ImageMetadata>,
+  )
+>()
+external int pixer_probe_from_memory(
+  ffi.Pointer<ffi.Uint8> data,
+  int len,
+  int format,
+  ffi.Pointer<ImageMetadata> out_metadata,
+);
+
+/// Get image metadata. `format` is always `PIXER_FORMAT_UNKNOWN`.
 @ffi.Native<
   ImageErrorCode$1 Function(
     ffi.Pointer<ImageHandle>,
@@ -328,6 +358,10 @@ final class ImageMetadata extends ffi.Struct {
 
   @ffi.Uint8()
   external int color_type;
+
+  /// `ImageFormatEnum` value, or `PIXER_FORMAT_UNKNOWN`.
+  @ffi.Uint32()
+  external int format;
 }
 
 /// One operation in a batch. Arguments are interpreted according to `kind`.
@@ -352,3 +386,5 @@ final class PixerOperation extends ffi.Struct {
 }
 
 const int PIXER_FORMAT_DETECT = 4294967295;
+
+const int PIXER_FORMAT_UNKNOWN = 4294967295;

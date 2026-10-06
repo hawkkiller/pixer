@@ -4,7 +4,13 @@ import 'package:ffi/ffi.dart' as ffi;
 
 import 'abi.dart';
 import 'bindings/bindings.dart'
-    hide FilterTypeEnum, ImageErrorCode, ImageFormatEnum, PixerOperationKind, PIXER_FORMAT_DETECT;
+    hide
+        FilterTypeEnum,
+        ImageErrorCode,
+        ImageFormatEnum,
+        PixerOperationKind,
+        PIXER_FORMAT_DETECT,
+        PIXER_FORMAT_UNKNOWN;
 import 'enums.dart';
 import 'image_metadata.dart';
 import 'image_operation.dart';
@@ -70,15 +76,41 @@ final class BackendImage implements ffi.Finalizable {
     return BackendImage._(image.value);
   });
 
+  static PixerMetadata probeFile(String path) => ffi.using((arena) {
+    _ensureCompatible();
+    final metadata = arena<ImageMetadata>();
+    checkImageError(
+      pixer_probe(path.toNativeUtf8(allocator: arena).cast(), metadata),
+      'path: $path',
+    );
+    return _metadata(metadata.ref);
+  });
+
+  static PixerMetadata probeMemory(Uint8List bytes, [ImageFormatEnum? format]) =>
+      ffi.using((arena) {
+        _ensureCompatible();
+        final data = arena<ffi.Uint8>(bytes.length)..asTypedList(bytes.length).setAll(0, bytes);
+        final metadata = arena<ImageMetadata>();
+        checkImageError(
+          pixer_probe_from_memory(
+            data,
+            bytes.length,
+            format?.value ?? PIXER_FORMAT_DETECT,
+            metadata,
+          ),
+          'input: memory',
+        );
+        return _metadata(metadata.ref);
+      });
+
   PixerMetadata getMetadata() => ffi.using((arena) {
     final pointer = arena<ImageMetadata>();
     checkImageError(pixer_get_metadata(_handle, pointer), 'operation: metadata');
-    return PixerMetadata(
-      width: pointer.ref.width,
-      height: pointer.ref.height,
-      colorType: ColorType.fromValue(pointer.ref.color_type),
-    );
+    return _metadata(pointer.ref);
   });
+
+  static PixerMetadata _metadata(ImageMetadata metadata) =>
+      metadataFromNative(metadata.width, metadata.height, metadata.color_type, metadata.format);
 
   BackendImage batchToImage(List<ImageOperation> operations) => ffi.using((arena) {
     final image = arena<ffi.Pointer<ImageHandle>>();

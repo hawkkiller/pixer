@@ -1,3 +1,5 @@
+import 'enums.dart';
+
 /// Pixel layout of an image: which channels are present.
 enum ColorType {
   luminance(0),
@@ -17,21 +19,27 @@ enum ColorType {
   };
 }
 
-/// Width, height, and color layout of an image.
+/// Width, height, color layout, and (when probed) container format of an image.
 final class PixerMetadata {
   const PixerMetadata({
     required this.width,
     required this.height,
     required this.colorType,
+    this.format,
   });
 
   final int width;
   final int height;
   final ColorType colorType;
 
+  /// The container format detected by [Pixer.probe] or [Pixer.probeFile];
+  /// null for decoded images, which no longer have one.
+  final ImageFormatEnum? format;
+
   @override
   String toString() =>
-      'PixerMetadata(width: $width, height: $height, colorType: ${colorType.name})';
+      'PixerMetadata(width: $width, height: $height, colorType: ${colorType.name}'
+      '${format == null ? '' : ', format: ${format!.name}'})';
 
   @override
   bool operator ==(Object other) =>
@@ -39,8 +47,24 @@ final class PixerMetadata {
       other is PixerMetadata &&
           width == other.width &&
           height == other.height &&
-          colorType == other.colorType;
+          colorType == other.colorType &&
+          format == other.format;
 
   @override
-  int get hashCode => Object.hash(width, height, colorType);
+  int get hashCode => Object.hash(width, height, colorType, format);
 }
+
+/// Builds metadata from the native `ImageMetadata` fields.
+PixerMetadata metadataFromNative(
+  int width,
+  int height,
+  int colorType,
+  int format,
+) => PixerMetadata(
+  width: width,
+  height: height,
+  colorType: ColorType.fromValue(colorType),
+  format: format == PIXER_FORMAT_UNKNOWN
+      ? null
+      : ImageFormatEnum.fromValue(format),
+);

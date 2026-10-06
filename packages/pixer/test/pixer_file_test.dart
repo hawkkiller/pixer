@@ -16,6 +16,32 @@ void main() {
     );
   });
 
+  test('probes a file without loading it', () async {
+    final directory = await Directory.systemTemp.createTemp('pixer_probe_');
+    final rotated = img.Image(width: 4, height: 2)
+      ..exif.imageIfd.orientation = 6;
+    final file = File('${directory.path}/rotated.jpg')
+      ..writeAsBytesSync(img.encodeJpg(rotated));
+    try {
+      expect(
+        Pixer.probeFile(file.path),
+        const PixerMetadata(
+          width: 2,
+          height: 4,
+          colorType: ColorType.rgb,
+          format: ImageFormatEnum.Jpeg,
+        ),
+      );
+    } finally {
+      await directory.delete(recursive: true);
+    }
+    expect(() => Pixer.probeFile(''), throwsA(isA<InvalidPathException>()));
+    expect(
+      () => Pixer.probeFile('nonexistent.jpg'),
+      throwsA(isA<IoException>()),
+    );
+  });
+
   test('saves the final image to a file', () async {
     final directory = await Directory.systemTemp.createTemp(
       'pixer_pipeline_test_',

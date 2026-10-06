@@ -12,6 +12,12 @@
 #define PIXER_FORMAT_DETECT 4294967295
 
 /**
+ * `ImageMetadata::format` of an image whose container format is unknown, such
+ * as a decoded handle.
+ */
+#define PIXER_FORMAT_UNKNOWN 4294967295
+
+/**
  * Sampling filter used when resizing.
  *
  * Quality and cost roughly increase from top to bottom; `Lanczos3` is the
@@ -198,6 +204,10 @@ typedef struct ImageMetadata {
   uint32_t width;
   uint32_t height;
   uint8_t color_type;
+  /**
+   * `ImageFormatEnum` value, or `PIXER_FORMAT_UNKNOWN`.
+   */
+  uint32_t format;
 } ImageMetadata;
 
 /**
@@ -237,12 +247,12 @@ void pixer_free_buffer(uint8_t *ptr, uintptr_t len);
 void pixer_free(struct ImageHandle *handle);
 
 /**
- * Load an image from a file path into `out_image`.
+ * Load an image from a file path into `out_image`, applying its EXIF orientation.
  */
 ImageErrorCode pixer_load(const char *path, struct ImageHandle **out_image);
 
 /**
- * Load an image from memory into `out_image`.
+ * Load an image from memory into `out_image`, applying its EXIF orientation.
  *
  * `format` is an `ImageFormatEnum` value, or `PIXER_FORMAT_DETECT`.
  */
@@ -252,7 +262,25 @@ ImageErrorCode pixer_load_from_memory(const uint8_t *data,
                                       struct ImageHandle **out_image);
 
 /**
- * Get image metadata
+ * Read a file's metadata into `out_metadata` without decoding pixels.
+ * Width and height account for the EXIF orientation, as after `pixer_load`.
+ */
+ImageErrorCode pixer_probe(const char *path, struct ImageMetadata *out_metadata);
+
+/**
+ * Read encoded image metadata into `out_metadata` without decoding pixels.
+ * Width and height account for the EXIF orientation, as after
+ * `pixer_load_from_memory`.
+ *
+ * `format` is an `ImageFormatEnum` value, or `PIXER_FORMAT_DETECT`.
+ */
+ImageErrorCode pixer_probe_from_memory(const uint8_t *data,
+                                       uintptr_t len,
+                                       uint32_t format,
+                                       struct ImageMetadata *out_metadata);
+
+/**
+ * Get image metadata. `format` is always `PIXER_FORMAT_UNKNOWN`.
  */
 ImageErrorCode pixer_get_metadata(const struct ImageHandle *handle,
                                   struct ImageMetadata *out_metadata);

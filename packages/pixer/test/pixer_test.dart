@@ -74,6 +74,13 @@ Uint8List _transparentPng() => Uint8List.fromList([
   0x82,
 ]);
 
+/// A 4x2 JPEG whose EXIF orientation rotates it 90 degrees clockwise.
+Uint8List _rotatedJpeg() {
+  final image = img.Image(width: 4, height: 2);
+  image.exif.imageIfd.orientation = 6;
+  return img.encodeJpg(image);
+}
+
 void main() {
   setUpAll(() => Pixer.initialize(wasmUri: Uri.parse('pixer.wasm')));
   group('Pixer', () {
@@ -1019,6 +1026,61 @@ void main() {
 
         expect(pipeline.toImage, throwsA(isA<InvalidPointerException>()));
         expect(image.grayscale, throwsA(isA<InvalidPointerException>()));
+      });
+    });
+
+    group('probe', () {
+      test('reads metadata without loading the image', () {
+        expect(
+          Pixer.probe(_transparentPng()),
+          const PixerMetadata(
+            width: 1,
+            height: 1,
+            colorType: ColorType.rgba,
+            format: ImageFormatEnum.Png,
+          ),
+        );
+      });
+
+      test('swaps width and height for rotated EXIF orientation', () {
+        final jpeg = _rotatedJpeg();
+        final loaded = Pixer.fromMemory(jpeg);
+        final probed = Pixer.probe(jpeg);
+
+        expect(
+          probed,
+          const PixerMetadata(
+            width: 2,
+            height: 4,
+            colorType: ColorType.rgb,
+            format: ImageFormatEnum.Jpeg,
+          ),
+        );
+        expect((probed.width, probed.height), (loaded.width, loaded.height));
+        expect(loaded.getMetadata().format, isNull);
+        loaded.dispose();
+      });
+
+      test('honors an explicit format', () {
+        expect(
+          Pixer.probe(_transparentPng(), format: ImageFormatEnum.Png).format,
+          ImageFormatEnum.Png,
+        );
+        expect(
+          () => Pixer.probe(_transparentPng(), format: ImageFormatEnum.Jpeg),
+          throwsA(isA<PixerException>()),
+        );
+      });
+
+      test('rejects empty and invalid input', () {
+        expect(
+          () => Pixer.probe(Uint8List(0)),
+          throwsA(isA<DecodingException>()),
+        );
+        expect(
+          () => Pixer.probe(Uint8List.fromList([0x00, 0x01, 0x02, 0x03])),
+          throwsA(isA<PixerException>()),
+        );
       });
     });
   });

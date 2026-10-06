@@ -180,6 +180,16 @@ print('${meta.width}x${meta.height}, ${meta.colorType}');
 print('${image.width}x${image.height}');
 ```
 
+To read the size and format of an encoded image without decoding its pixels,
+for example to lay out a gallery before loading thumbnails, use `probe`:
+
+```dart
+final info = Pixer.probe(bytes); // or Pixer.probeFile('photo.jpg') on native
+print('${info.width}x${info.height} ${info.format}');
+```
+
+Width and height account for EXIF orientation, so they match the loaded image.
+
 ## Resource Management
 
 Every `Pixer` owns a Rust handle: the one you load and every `toImage()` result.
@@ -223,7 +233,7 @@ Linux, macOS, Windows, Android, iOS, Web (WebAssembly)
 - [x] Resize (aspect-ratio-preserving & exact) with 5 filter types
 - [x] Crop, rotate (90/180/270), flip (H/V)
 - [x] Adjustments: blur, brightness, contrast, grayscale, invert
-- [x] Metadata access (width, height, color type)
+- [x] Metadata access (width, height, color type), and probing without decoding
 - [x] Encoder objects with JPEG quality support
 - [x] Lazy pipelines with image, byte, and file outputs
 - [x] Full platform support (Linux, macOS, Windows, Android, iOS)
