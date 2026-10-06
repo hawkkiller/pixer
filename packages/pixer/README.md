@@ -170,6 +170,21 @@ final webpBytes = image.encode(const PixerWebPEncoder());
 
 `encode` accepts any [`PixerEncoder`](lib/src/pixer_encoder.dart): `PixerPngEncoder`, `PixerJpegEncoder`, `PixerGifEncoder`, `PixerWebPEncoder`, `PixerBmpEncoder`, `PixerIcoEncoder`, `PixerTiffEncoder`. Only `PixerJpegEncoder` currently has tunable options (`quality`, 1–100).
 
+## Raw Pixels
+
+`toRgba()` returns 8-bit RGBA pixels (16-bit and floating-point images are converted down), ready for Flutter's `ui.decodeImageFromPixels`. It is a terminal, so a pipeline runs before converting.
+
+```dart
+final pixels = image.resize(400, 400).toRgba();
+ui.decodeImageFromPixels(
+  pixels.bytes, pixels.width, pixels.height, ui.PixelFormat.rgba8888, onDone);
+
+// Camera frames, ML output, or any other raw 8-bit buffer.
+final frame = Pixer.fromPixels(width, height, bgraBytes, layout: PixelLayout.bgra8);
+```
+
+`fromPixels` accepts `PixelLayout.rgba8` (default), `rgb8`, `bgra8`, and `gray8`, and throws `InvalidParameterException` unless `bytes` holds exactly `width * height` pixels.
+
 ## Metadata
 
 ```dart
@@ -226,6 +241,7 @@ Linux, macOS, Windows, Android, iOS, Web (WebAssembly)
 - [x] Metadata access (width, height, color type)
 - [x] Encoder objects with JPEG quality support
 - [x] Lazy pipelines with image, byte, and file outputs
+- [x] Raw 8-bit pixel import and RGBA export
 - [x] Full platform support (Linux, macOS, Windows, Android, iOS)
 - [x] Web support through the Rust WebAssembly build
 

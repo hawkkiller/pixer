@@ -26,7 +26,7 @@ external void pixer_free_buffer(ffi.Pointer<ffi.Uint8> ptr, int len);
 @ffi.Native<ffi.Void Function(ffi.Pointer<ImageHandle>)>(isLeaf: true)
 external void pixer_free(ffi.Pointer<ImageHandle> handle);
 
-/// Load an image from a file path into `out_image`.
+/// Load an image from a file path into `out_image`, applying its EXIF orientation.
 @ffi.Native<
   ImageErrorCode$1 Function(
     ffi.Pointer<ffi.Char>,
@@ -38,7 +38,7 @@ external int pixer_load(
   ffi.Pointer<ffi.Pointer<ImageHandle>> out_image,
 );
 
-/// Load an image from memory into `out_image`.
+/// Load an image from memory into `out_image`, applying its EXIF orientation.
 ///
 /// `format` is an `ImageFormatEnum` value, or `PIXER_FORMAT_DETECT`.
 @ffi.Native<
@@ -53,6 +53,31 @@ external int pixer_load_from_memory(
   ffi.Pointer<ffi.Uint8> data,
   int len,
   int format,
+  ffi.Pointer<ffi.Pointer<ImageHandle>> out_image,
+);
+
+/// Create an image from `len` bytes of 8-bit pixels at `data`, row-major with
+/// no row padding, and write it to `out_image`. `layout` is a `PixelLayout`
+/// value. The bytes are copied, so the caller keeps ownership of `data`.
+///
+/// `len` must equal `width * height * bytes per pixel`; otherwise this
+/// returns `InvalidParameter`.
+@ffi.Native<
+  ImageErrorCode$1 Function(
+    ffi.Uint32,
+    ffi.Uint32,
+    ffi.Pointer<ffi.Uint8>,
+    ffi.UintPtr,
+    ffi.Uint32,
+    ffi.Pointer<ffi.Pointer<ImageHandle>>,
+  )
+>(isLeaf: true)
+external int pixer_from_pixels(
+  int width,
+  int height,
+  ffi.Pointer<ffi.Uint8> data,
+  int len,
+  int layout,
   ffi.Pointer<ffi.Pointer<ImageHandle>> out_image,
 );
 
@@ -110,6 +135,32 @@ external int pixer_batch_encode(
   int jpeg_quality,
   ffi.Pointer<ffi.Pointer<ffi.Uint8>> out_data,
   ffi.Pointer<ffi.UintPtr> out_len,
+  ffi.Pointer<ffi.UintPtr> out_failed_index,
+);
+
+/// Apply a batch and convert the final image to 8-bit RGBA, converting down
+/// from 16-bit and floating-point images.
+///
+/// `out_image` receives a new RGBA image that owns the pixels: `out_data`
+/// points at its `width * height * 4` bytes, row-major with no row padding,
+/// and stays valid until `out_image` is freed with `pixer_free`. Read the
+/// dimensions with `pixer_get_metadata`.
+@ffi.Native<
+  ImageErrorCode$1 Function(
+    ffi.Pointer<ImageHandle>,
+    ffi.Pointer<PixerOperation>,
+    ffi.UintPtr,
+    ffi.Pointer<ffi.Pointer<ImageHandle>>,
+    ffi.Pointer<ffi.Pointer<ffi.Uint8>>,
+    ffi.Pointer<ffi.UintPtr>,
+  )
+>()
+external int pixer_batch_to_rgba(
+  ffi.Pointer<ImageHandle> handle,
+  ffi.Pointer<PixerOperation> operations,
+  int operation_count,
+  ffi.Pointer<ffi.Pointer<ImageHandle>> out_image,
+  ffi.Pointer<ffi.Pointer<ffi.Uint8>> out_data,
   ffi.Pointer<ffi.UintPtr> out_failed_index,
 );
 
@@ -262,6 +313,35 @@ enum ImageFormatEnum {
 
 typedef ImageFormatEnum$1 = ffi.Uint32;
 typedef DartImageFormatEnum = int;
+
+/// Byte order of 8-bit pixels passed to `pixer_from_pixels`.
+enum PixelLayout {
+  /// Red, green, blue, alpha; 4 bytes per pixel.
+  Rgba8(0),
+
+  /// Red, green, blue; 3 bytes per pixel.
+  Rgb8(1),
+
+  /// Blue, green, red, alpha; 4 bytes per pixel. Stored as RGBA.
+  Bgra8(2),
+
+  /// Luminance; 1 byte per pixel.
+  Gray8(3);
+
+  final int value;
+  const PixelLayout(this.value);
+
+  static PixelLayout fromValue(int value) => switch (value) {
+    0 => Rgba8,
+    1 => Rgb8,
+    2 => Bgra8,
+    3 => Gray8,
+    _ => throw ArgumentError('Unknown value for PixelLayout: $value'),
+  };
+}
+
+typedef PixelLayout$1 = ffi.Uint32;
+typedef DartPixelLayout = int;
 
 /// Stable operation identifiers shared by the native and Dart batch APIs.
 ///

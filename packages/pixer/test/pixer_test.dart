@@ -1021,5 +1021,106 @@ void main() {
         expect(image.grayscale, throwsA(isA<InvalidPointerException>()));
       });
     });
+
+    group('raw pixels', () {
+      // Two pixels: opaque red, half-transparent blue.
+      final rgba = Uint8List.fromList([255, 0, 0, 255, 0, 0, 255, 128]);
+
+      test('round-trips RGBA', () {
+        final image = Pixer.fromPixels(2, 1, rgba);
+        addTearDown(image.dispose);
+        expect((image.width, image.height), (2, 1));
+        expect(image.colorType, ColorType.rgba);
+
+        final pixels = image.toRgba();
+        expect((pixels.width, pixels.height), (2, 1));
+        expect(pixels.bytes, rgba);
+      });
+
+      test('converts BGRA, RGB, and gray input to RGBA', () {
+        for (final (layout, bytes, expected) in [
+          (PixelLayout.bgra8, [0, 0, 255, 255, 255, 0, 0, 128], rgba),
+          (PixelLayout.rgb8, [1, 2, 3, 4, 5, 6], [1, 2, 3, 255, 4, 5, 6, 255]),
+          (PixelLayout.gray8, [7, 8], [7, 7, 7, 255, 8, 8, 8, 255]),
+        ]) {
+          final image = Pixer.fromPixels(
+            2,
+            1,
+            Uint8List.fromList(bytes),
+            layout: layout,
+          );
+          addTearDown(image.dispose);
+          expect(image.toRgba().bytes, expected, reason: layout.name);
+        }
+      });
+
+      test('copies the input bytes', () {
+        final input = Uint8List.fromList(rgba);
+        final image = Pixer.fromPixels(2, 1, input);
+        addTearDown(image.dispose);
+        input.fillRange(0, input.length, 0);
+        expect(image.toRgba().bytes, rgba);
+      });
+
+      test('reads typed data views', () {
+        final backing = Uint8List.fromList([9, 9, ...rgba]);
+        final image = Pixer.fromPixels(2, 1, Uint8List.sublistView(backing, 2));
+        addTearDown(image.dispose);
+        expect(image.toRgba().bytes, rgba);
+      });
+
+      test('rejects a wrong byte length or empty dimensions', () {
+        expect(
+          () => Pixer.fromPixels(2, 1, Uint8List(7)),
+          throwsA(
+            isA<InvalidParameterException>().having(
+              (error) => error.message,
+              'message',
+              contains('expected 8 bytes for 2x1 rgba8, got 7'),
+            ),
+          ),
+        );
+        expect(
+          () => Pixer.fromPixels(2, 1, rgba, layout: PixelLayout.rgb8),
+          throwsA(isA<InvalidParameterException>()),
+        );
+        expect(
+          () => Pixer.fromPixels(0, 1, Uint8List(0)),
+          throwsA(isA<InvalidDimensionsException>()),
+        );
+      });
+
+      test('runs the pipeline before converting', () {
+        final image = Pixer.fromPixels(2, 1, rgba);
+        addTearDown(image.dispose);
+        final pixels = image.rotate90().flipVertical().toRgba();
+        expect((pixels.width, pixels.height), (1, 2));
+        expect(pixels.bytes, [0, 0, 255, 128, 255, 0, 0, 255]);
+      });
+
+      test('converts 16-bit images down to 8 bits', () {
+        final input = img.Image(
+          width: 1,
+          height: 1,
+          numChannels: 4,
+          format: img.Format.uint16,
+        )..setPixelRgba(0, 0, 65535, 0, 32896, 65535);
+        final image = Pixer.fromMemory(img.encodePng(input));
+        addTearDown(image.dispose);
+        expect(image.toRgba().bytes, [255, 0, 128, 255]);
+      });
+
+      test('pixels outlive the image they came from', () {
+        final image = Pixer.fromPixels(2, 1, rgba);
+        final pixels = image.toRgba();
+        image.dispose();
+        expect(pixels.bytes, rgba);
+      });
+
+      test('rejects a disposed image', () {
+        final image = Pixer.fromPixels(2, 1, rgba)..dispose();
+        expect(image.toRgba, throwsA(isA<InvalidPointerException>()));
+      });
+    });
   });
 }

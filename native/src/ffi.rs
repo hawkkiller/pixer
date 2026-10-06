@@ -97,6 +97,41 @@ impl TryFrom<u32> for ImageFormatEnum {
     }
 }
 
+/// Byte order of 8-bit pixels passed to `pixer_from_pixels`.
+#[derive(Clone, Copy)]
+#[repr(u32)]
+pub enum PixelLayout {
+    /// Red, green, blue, alpha; 4 bytes per pixel.
+    Rgba8 = 0,
+    /// Red, green, blue; 3 bytes per pixel.
+    Rgb8 = 1,
+    /// Blue, green, red, alpha; 4 bytes per pixel. Stored as RGBA.
+    Bgra8 = 2,
+    /// Luminance; 1 byte per pixel.
+    Gray8 = 3,
+}
+
+impl PixelLayout {
+    fn bytes_per_pixel(self) -> u64 {
+        match self {
+            Self::Rgba8 | Self::Bgra8 => 4,
+            Self::Rgb8 => 3,
+            Self::Gray8 => 1,
+        }
+    }
+}
+
+impl TryFrom<u32> for PixelLayout {
+    type Error = ImageErrorCode;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        [Self::Rgba8, Self::Rgb8, Self::Bgra8, Self::Gray8]
+            .into_iter()
+            .find(|layout| *layout as u32 == value)
+            .ok_or(ImageErrorCode::InvalidParameter)
+    }
+}
+
 /// Pass as the `format` of `pixer_load_from_memory` to detect it from the bytes.
 pub const PIXER_FORMAT_DETECT: u32 = 0xFFFF_FFFF;
 
@@ -615,6 +650,44 @@ fn decode<R: BufRead + Seek>(reader: ImageReader<R>) -> Result<DynamicImage, Ima
     Ok(image)
 }
 
+/// Copies `bytes` into an image, checking they hold exactly `width` x
+/// `height` pixels of `layout`.
+fn image_from_pixels(
+    width: u32,
+    height: u32,
+    bytes: &[u8],
+    layout: PixelLayout,
+) -> Result<DynamicImage, ImageErrorCode> {
+    if width == 0 || height == 0 {
+        return Err(ImageErrorCode::InvalidDimensions);
+    }
+    let expected = (u64::from(width) * u64::from(height)).checked_mul(layout.bytes_per_pixel());
+    if expected != u64::try_from(bytes.len()).ok() {
+        return Err(ImageErrorCode::InvalidParameter);
+    }
+    let pixels = bytes.to_vec();
+    // `from_raw` only fails on a short buffer, which the length check rules out.
+    let image = match layout {
+        PixelLayout::Rgba8 => {
+            ImageBuffer::from_raw(width, height, pixels).map(DynamicImage::ImageRgba8)
+        }
+        PixelLayout::Rgb8 => {
+            ImageBuffer::from_raw(width, height, pixels).map(DynamicImage::ImageRgb8)
+        }
+        PixelLayout::Gray8 => {
+            ImageBuffer::from_raw(width, height, pixels).map(DynamicImage::ImageLuma8)
+        }
+        PixelLayout::Bgra8 => {
+            let mut pixels = pixels;
+            for pixel in pixels.chunks_exact_mut(4) {
+                pixel.swap(0, 2);
+            }
+            ImageBuffer::from_raw(width, height, pixels).map(DynamicImage::ImageRgba8)
+        }
+    };
+    image.ok_or(ImageErrorCode::InvalidParameter)
+}
+
 fn load(
     out_image: *mut *mut ImageHandle,
     decode: impl FnOnce() -> Result<DynamicImage, ImageErrorCode>,
@@ -633,7 +706,7 @@ fn load(
 /// ABI contract version. Increment for incompatible signatures, layouts, or IDs.
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_abi_version() -> u32 {
-    2
+    3
 }
 
 /// Pixel-buffer byte length for native memory accounting; zero for a null handle.
@@ -727,6 +800,30 @@ pub extern "C" fn pixer_load_from_memory(
     })
 }
 
+/// Create an image from `len` bytes of 8-bit pixels at `data`, row-major with
+/// no row padding, and write it to `out_image`. `layout` is a `PixelLayout`
+/// value. The bytes are copied, so the caller keeps ownership of `data`.
+///
+/// `len` must equal `width * height * bytes per pixel`; otherwise this
+/// returns `InvalidParameter`.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixer_from_pixels(
+    width: u32,
+    height: u32,
+    data: *const u8,
+    len: usize,
+    layout: u32,
+    out_image: *mut *mut ImageHandle,
+) -> ImageErrorCode {
+    load(out_image, || {
+        if data.is_null() {
+            return Err(ImageErrorCode::InvalidPointer);
+        }
+        let bytes = unsafe { slice::from_raw_parts(data, len) };
+        image_from_pixels(width, height, bytes, PixelLayout::try_from(layout)?)
+    })
+}
+
 /// Get image metadata
 #[unsafe(no_mangle)]
 pub extern "C" fn pixer_get_metadata(
@@ -802,6 +899,46 @@ pub extern "C" fn pixer_batch_encode(
             let buffer = Box::into_raw(buffer.into_boxed_slice());
             *out_len = buffer.len();
             *out_data = buffer as *mut u8;
+            Ok(())
+        },
+    )
+}
+
+/// Apply a batch and convert the final image to 8-bit RGBA, converting down
+/// from 16-bit and floating-point images.
+///
+/// `out_image` receives a new RGBA image that owns the pixels: `out_data`
+/// points at its `width * height * 4` bytes, row-major with no row padding,
+/// and stays valid until `out_image` is freed with `pixer_free`. Read the
+/// dimensions with `pixer_get_metadata`.
+#[unsafe(no_mangle)]
+pub extern "C" fn pixer_batch_to_rgba(
+    handle: *const ImageHandle,
+    operations: *const PixerOperation,
+    operation_count: usize,
+    out_image: *mut *mut ImageHandle,
+    out_data: *mut *const u8,
+    out_failed_index: *mut usize,
+) -> ImageErrorCode {
+    write(out_image, std::ptr::null_mut());
+    write(out_data, std::ptr::null());
+    run_batch(
+        handle,
+        operations,
+        operation_count,
+        out_failed_index,
+        |image| {
+            let (Some(out_image), Some(out_data)) =
+                (unsafe { (out_image.as_mut(), out_data.as_mut()) })
+            else {
+                return Err(ImageErrorCode::InvalidPointer);
+            };
+            let rgba = match image.into_owned() {
+                rgba @ DynamicImage::ImageRgba8(_) => rgba,
+                other => DynamicImage::ImageRgba8(other.to_rgba8()),
+            };
+            *out_data = rgba.as_bytes().as_ptr();
+            *out_image = into_handle(rgba);
             Ok(())
         },
     )
@@ -916,5 +1053,107 @@ mod tests {
             pixer_free(handle);
         }
         assert_eq!(pixer_image_byte_length(std::ptr::null()), 0);
+    }
+
+    fn to_rgba(handle: *const ImageHandle, operations: &[PixerOperation]) -> (u32, u32, Vec<u8>) {
+        let (mut rgba, mut data, mut failed) = (std::ptr::null_mut(), std::ptr::null(), 0);
+        let code = pixer_batch_to_rgba(
+            handle,
+            operations.as_ptr(),
+            operations.len(),
+            &mut rgba,
+            &mut data,
+            &mut failed,
+        );
+        assert!(matches!(code, ImageErrorCode::Success), "{code:?}");
+        let image = image_ref(rgba).unwrap();
+        let len = image.width() as usize * image.height() as usize * 4;
+        let result = (
+            image.width(),
+            image.height(),
+            unsafe { slice::from_raw_parts(data, len) }.to_vec(),
+        );
+        pixer_free(rgba);
+        result
+    }
+
+    #[test]
+    fn pixels_round_trip_through_every_layout() {
+        let rgba = [1, 2, 3, 4, 5, 6, 7, 8];
+        for (layout, bytes, expected) in [
+            (PixelLayout::Rgba8, &rgba[..], rgba),
+            (PixelLayout::Bgra8, &[3, 2, 1, 4, 7, 6, 5, 8][..], rgba),
+            (
+                PixelLayout::Rgb8,
+                &[1, 2, 3, 5, 6, 7][..],
+                [1, 2, 3, 255, 5, 6, 7, 255],
+            ),
+            (
+                PixelLayout::Gray8,
+                &[9, 10][..],
+                [9, 9, 9, 255, 10, 10, 10, 255],
+            ),
+        ] {
+            let mut handle = std::ptr::null_mut();
+            let code = pixer_from_pixels(
+                2,
+                1,
+                bytes.as_ptr(),
+                bytes.len(),
+                layout as u32,
+                &mut handle,
+            );
+            assert!(matches!(code, ImageErrorCode::Success), "{code:?}");
+            assert_eq!(to_rgba(handle, &[]), (2, 1, expected.to_vec()));
+            pixer_free(handle);
+        }
+    }
+
+    #[test]
+    fn from_pixels_rejects_mismatched_input() {
+        let bytes = [0; 8];
+        for (width, height, len, layout, expected) in [
+            (2, 1, 7, PixelLayout::Rgba8 as u32, "InvalidParameter"),
+            (2, 1, 8, PixelLayout::Rgb8 as u32, "InvalidParameter"),
+            (0, 1, 0, PixelLayout::Gray8 as u32, "InvalidDimensions"),
+            (
+                u32::MAX,
+                u32::MAX,
+                8,
+                PixelLayout::Rgba8 as u32,
+                "InvalidParameter",
+            ),
+            (1, 1, 0, PixelLayout::Gray8 as u32, "InvalidParameter"),
+            (2, 1, 8, 4, "InvalidParameter"),
+        ] {
+            let mut handle = std::ptr::null_mut();
+            let code = pixer_from_pixels(width, height, bytes.as_ptr(), len, layout, &mut handle);
+            assert_eq!(
+                format!("{code:?}"),
+                expected,
+                "{width}x{height}, {len} bytes"
+            );
+            assert!(handle.is_null());
+        }
+    }
+
+    #[test]
+    fn to_rgba_applies_operations_and_converts_to_8_bit() {
+        let mut image = image::Rgba32FImage::new(2, 1);
+        image.put_pixel(0, 0, image::Rgba([1.0, 0.0, 0.5, 1.0]));
+        let handle = into_handle(DynamicImage::ImageRgba32F(image));
+        let rotate = PixerOperation {
+            kind: PixerOperationKind::Rotate90 as u32,
+            arg0: 0,
+            arg1: 0,
+            arg2: 0,
+            arg3: 0,
+            scalar: 0.0,
+        };
+        assert_eq!(
+            to_rgba(handle, &[rotate]),
+            (1, 2, vec![255, 0, 128, 255, 0, 0, 0, 0])
+        );
+        pixer_free(handle);
     }
 }

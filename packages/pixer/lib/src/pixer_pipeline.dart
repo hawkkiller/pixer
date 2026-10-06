@@ -4,9 +4,9 @@ part of 'pixer_base.dart';
 ///
 /// Each operation returns a new pipeline, so a pipeline can be safely
 /// branched. Nothing is processed until a terminal method ([toImage],
-/// [encode], or [saveToFile]) is called; the terminal runs every operation in
-/// a single native call, keeping intermediates inside Rust. Terminals leave
-/// the source unchanged and may be called repeatedly.
+/// [encode], [toRgba], or [saveToFile]) is called; the terminal runs every
+/// operation in a single native call, keeping intermediates inside Rust.
+/// Terminals leave the source unchanged and may be called repeatedly.
 ///
 /// Arguments are validated when each operation is added. Checks that depend on
 /// the image, such as crop bounds, run against the preceding operation's
@@ -98,6 +98,17 @@ final class PixerPipeline {
   Uint8List encode(PixerEncoder encoder) {
     _source._checkDisposed();
     return _source._backend.encode(encoder, _operations);
+  }
+
+  /// Runs the pipeline and returns the result as 8-bit RGBA pixels.
+  ///
+  /// 16-bit and floating-point images are converted down to 8 bits. The
+  /// bytes can be passed to Flutter's `ui.decodeImageFromPixels` with
+  /// `ui.PixelFormat.rgba8888`. On native platforms they are not copied out
+  /// of the engine and are freed when the returned list is garbage collected.
+  RawPixels toRgba() {
+    _source._checkDisposed();
+    return _source._backend.toRgba(_operations);
   }
 
   /// Runs the pipeline and saves the result; the extension picks the format.

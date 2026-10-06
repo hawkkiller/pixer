@@ -1,3 +1,9 @@
+## Unreleased
+
+- Added `Pixer.toRgba()` and `PixerPipeline.toRgba()`, which return 8-bit RGBA `RawPixels` ready for Flutter's `ui.decodeImageFromPixels`. 16-bit and floating-point images are converted down to 8 bits. On native platforms the bytes are not copied out of the engine.
+- Added `Pixer.fromPixels(width, height, bytes, layout:)` to create an image from raw 8-bit RGBA, RGB, BGRA, or grayscale pixels. A byte length that does not match the dimensions throws `InvalidParameterException`.
+- **Breaking (native ABI 3):** Added `pixer_from_pixels` and `pixer_batch_to_rgba`. Rebuild binaries for this package revision.
+
 ## 0.0.12
 
 - Native binaries no longer include image codecs outside the supported formats (AVIF, EXR, HDR, QOI, TGA, DDS, PNM, Farbfeld), shrinking them by roughly 60% (macOS arm64: 4.9 MB to 1.8 MB). Auto-detected loading of those formats now throws `UnsupportedFormatException`.

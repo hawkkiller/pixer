@@ -8,6 +8,7 @@ const _leafSymbols = {
   'pixer_free_buffer',
   'pixer_free',
   'pixer_get_metadata',
+  'pixer_from_pixels',
 };
 const _sharedEnums = {
   'FilterTypeEnum',

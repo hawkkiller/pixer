@@ -26,7 +26,7 @@ void main() {
         ),
       ),
     );
-    // A minimal module exporting pixer_abi_version() => 3.
+    // A minimal module exporting pixer_abi_version() => 0.
     final name = utf8.encode('pixer_abi_version');
     await expectLater(
       Pixer.initialize(
@@ -63,7 +63,7 @@ void main() {
           4,
           0,
           65,
-          3,
+          0,
           11,
         ]),
       ),
@@ -71,7 +71,7 @@ void main() {
         isA<StateError>().having(
           (error) => error.message,
           'message',
-          contains('expected 2, got 3'),
+          contains('expected 3, got 0'),
         ),
       ),
     );
