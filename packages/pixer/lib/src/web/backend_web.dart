@@ -49,6 +49,15 @@ final class BackendImage {
   factory BackendImage.fromMemory(Uint8List bytes, [ImageFormatEnum? format]) =>
       BackendImage._(_wasm.loadImage(bytes, format));
 
+  static PixerMetadata probeFile(String path) => throw UnsupportedError(
+    'Pixer.probeFile is unavailable on web; use Pixer.probe',
+  );
+
+  static PixerMetadata probeMemory(
+    Uint8List bytes, [
+    ImageFormatEnum? format,
+  ]) => _wasm.probe(bytes, format);
+
   PixerMetadata getMetadata() => _wasm.metadata(_handle);
 
   BackendImage batchToImage(List<ImageOperation> operations) =>

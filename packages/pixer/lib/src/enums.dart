@@ -177,3 +177,4 @@ enum PixerOperationKind {
 }
 
 const int PIXER_FORMAT_DETECT = 4294967295;
+const int PIXER_FORMAT_UNKNOWN = 4294967295;

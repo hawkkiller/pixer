@@ -15,7 +15,7 @@ const _sharedEnums = {
   'ImageFormatEnum',
   'PixerOperationKind',
 };
-const _sharedConstants = {'PIXER_FORMAT_DETECT'};
+const _sharedConstants = {'PIXER_FORMAT_DETECT', 'PIXER_FORMAT_UNKNOWN'};
 
 void main() {
   final packageDir = File.fromUri(Platform.script).absolute.parent.parent.uri;

@@ -24,6 +24,16 @@ print('${metadata.width}x${metadata.height}, ${metadata.colorType}');
 print('${image.width}x${image.height}');
 ```
 
+To read the size and format of an encoded image without decoding its pixels,
+for example to lay out a gallery before loading thumbnails, use `probe`:
+
+```dart
+final info = Pixer.probe(bytes); // or Pixer.probeFile('photo.jpg') on native
+print('${info.width}x${info.height} ${info.format}');
+```
+
+Width and height account for EXIF orientation, so they match the loaded image.
+
 ## Release resources
 
 Every `Pixer` owns a Rust image handle: the one you load and every image

@@ -17,5 +17,5 @@ library;
 export 'src/pixer_base.dart';
 export 'src/pixer_exception.dart' hide checkBatchError, checkImageError;
 export 'src/enums.dart' show FilterTypeEnum, ImageErrorCode, ImageFormatEnum;
-export 'src/image_metadata.dart';
+export 'src/image_metadata.dart' hide metadataFromNative;
 export 'src/pixer_encoder.dart';

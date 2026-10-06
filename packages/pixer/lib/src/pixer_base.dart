@@ -68,6 +68,29 @@ final class Pixer {
     return Pixer._(BackendImage.fromMemory(data, format));
   }
 
+  /// Reads the width, height, color type, and format of an image file without
+  /// decoding its pixels.
+  ///
+  /// Width and height account for the EXIF orientation, so they match
+  /// [Pixer.fromFile]. The format is picked from the file extension, the same
+  /// as [Pixer.fromFile]. Throws the same exceptions as [Pixer.fromFile],
+  /// including [UnsupportedError] on web; use [Pixer.probe] instead.
+  static PixerMetadata probeFile(String path) {
+    if (path.trim().isEmpty) throw InvalidPathException('path is empty');
+    return BackendImage.probeFile(path);
+  }
+
+  /// Reads the width, height, color type, and format of encoded image [bytes]
+  /// without decoding their pixels.
+  ///
+  /// Width and height account for the EXIF orientation, so they match
+  /// [Pixer.fromMemory]. The format is detected from the bytes unless [format]
+  /// is given. Throws the same exceptions as [Pixer.fromMemory].
+  static PixerMetadata probe(Uint8List bytes, {ImageFormatEnum? format}) {
+    if (bytes.isEmpty) throw DecodingException('input buffer is empty');
+    return BackendImage.probeMemory(bytes, format);
+  }
+
   /// Checks if the image has been disposed
   void _checkDisposed() {
     if (_isDisposed) {
@@ -80,7 +103,8 @@ final class Pixer {
     return PixerPipeline._(this, const []);
   }
 
-  /// Gets the image metadata (width, height, color type).
+  /// Gets the image metadata (width, height, color type). The format is
+  /// always null; use [probe] to read it from encoded bytes.
   ///
   /// The result is cached; subsequent calls return the cached value
   /// without calling the platform backend again.

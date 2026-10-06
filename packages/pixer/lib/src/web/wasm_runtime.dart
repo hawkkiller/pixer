@@ -45,6 +45,12 @@ extension type _Exports._(JSObject _) implements JSObject {
     int format,
     int outImage,
   );
+  external int pixer_probe_from_memory(
+    int data,
+    int length,
+    int format,
+    int outMetadata,
+  );
   external int pixer_get_metadata(int handle, int metadata);
   external int pixer_batch_to_image(
     int handle,
@@ -138,16 +144,42 @@ final class WasmRuntime {
         return _u32(pointer);
       }, alignment: 4);
 
-  PixerMetadata metadata(int handle) => _withAllocation(12, (pointer) {
-    final code = _exports.pixer_get_metadata(handle, pointer);
-    checkImageError(code, 'operation: metadata');
-    final data = _data(pointer, 12);
-    return PixerMetadata(
-      width: data.getUint32(0, Endian.little),
-      height: data.getUint32(4, Endian.little),
-      colorType: ColorType.fromValue(data.getUint8(8)),
+  // One block: the ImageMetadata out-struct, then the encoded bytes.
+  PixerMetadata probe(Uint8List data, ImageFormatEnum? format) =>
+      _withAllocation(_metadataSize + data.length, (pointer) {
+        Uint8List.view(
+          _buffer,
+          pointer + _metadataSize,
+          data.length,
+        ).setAll(0, data);
+        final code = _exports.pixer_probe_from_memory(
+          pointer + _metadataSize,
+          data.length,
+          format?.value ?? PIXER_FORMAT_DETECT,
+          pointer,
+        );
+        checkImageError(code, 'input: memory');
+        return _readMetadata(pointer);
+      }, alignment: 4);
+
+  PixerMetadata metadata(int handle) =>
+      _withAllocation(_metadataSize, (pointer) {
+        final code = _exports.pixer_get_metadata(handle, pointer);
+        checkImageError(code, 'operation: metadata');
+        return _readMetadata(pointer);
+      }, alignment: 4);
+
+  static const _metadataSize = 16;
+
+  PixerMetadata _readMetadata(int pointer) {
+    final data = _data(pointer, _metadataSize);
+    return metadataFromNative(
+      data.getUint32(0, Endian.little),
+      data.getUint32(4, Endian.little),
+      data.getUint8(8),
+      data.getUint32(12, Endian.little),
     );
-  }, alignment: 4);
+  }
 
   Uint8List encode(
     int handle,

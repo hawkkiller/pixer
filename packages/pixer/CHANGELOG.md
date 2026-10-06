@@ -1,3 +1,8 @@
+## Unreleased
+
+- Added `Pixer.probe(bytes)` and `Pixer.probeFile(path)`, which read an image's width, height, color type, and format without decoding its pixels. Width and height account for EXIF orientation, matching a loaded image. `PixerMetadata` gained a `format` field, set only by probing.
+- **Breaking (native ABI 3):** Added `pixer_probe` and `pixer_probe_from_memory`, and appended a `format` field to `ImageMetadata`. Rebuild binaries for this package revision.
+
 ## 0.0.12
 
 - Native binaries no longer include image codecs outside the supported formats (AVIF, EXR, HDR, QOI, TGA, DDS, PNM, Farbfeld), shrinking them by roughly 60% (macOS arm64: 4.9 MB to 1.8 MB). Auto-detected loading of those formats now throws `UnsupportedFormatException`.
