@@ -7,6 +7,7 @@ import 'image_metadata.dart';
 import 'image_operation.dart';
 import 'pixer_encoder.dart';
 import 'pixer_exception.dart';
+import 'raw_pixels.dart';
 
 part 'pixer_pipeline.dart';
 
@@ -68,6 +69,38 @@ final class Pixer {
     return Pixer._(BackendImage.fromMemory(data, format));
   }
 
+  /// Creates an image from raw 8-bit pixels, row-major with no row padding.
+  ///
+  /// [bytes] must hold exactly `width * height * layout.bytesPerPixel`
+  /// bytes; they are copied, so the caller keeps ownership. [PixelLayout.bgra8]
+  /// is converted to RGBA.
+  ///
+  /// Throws [InvalidDimensionsException] if [width] or [height] is not a
+  /// positive unsigned 32-bit value.
+  /// Throws [InvalidParameterException] if the length of [bytes] does not
+  /// match.
+  factory Pixer.fromPixels(
+    int width,
+    int height,
+    Uint8List bytes, {
+    PixelLayout layout = PixelLayout.rgba8,
+  }) {
+    if (width <= 0 ||
+        height <= 0 ||
+        width > 0xFFFFFFFF ||
+        height > 0xFFFFFFFF) {
+      throw InvalidDimensionsException('width and height must be > 0');
+    }
+    final expected = width * height * layout.bytesPerPixel;
+    if (bytes.length != expected) {
+      throw InvalidParameterException(
+        'expected $expected bytes for ${width}x$height ${layout.name}, '
+        'got ${bytes.length}',
+      );
+    }
+    return Pixer._(BackendImage.fromPixels(width, height, bytes, layout));
+  }
+
   /// Checks if the image has been disposed
   void _checkDisposed() {
     if (_isDisposed) {
@@ -110,6 +143,9 @@ final class Pixer {
   /// Pass `const PixerPngEncoder()` (or any other [PixerEncoder]) for default
   /// settings, or e.g. `PixerJpegEncoder(quality: 90)` to tune output.
   Uint8List encode(PixerEncoder encoder) => _pipeline.encode(encoder);
+
+  /// Converts the image to 8-bit RGBA pixels. See [PixerPipeline.toRgba].
+  RawPixels toRgba() => _pipeline.toRgba();
 
   /// Starts a pipeline that resizes to fit within [width] x [height],
   /// preserving aspect ratio. See [PixerPipeline.resize].

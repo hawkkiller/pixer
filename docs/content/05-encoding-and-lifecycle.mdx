@@ -14,6 +14,24 @@ final webp = image.encode(const PixerWebPEncoder());
 Pixer also provides GIF, BMP, ICO, and TIFF encoders. JPEG quality accepts
 values from 1 through 100 and defaults to 75.
 
+## Raw pixels
+
+`toRgba()` returns the image as 8-bit RGBA bytes, row-major with no padding,
+which Flutter's `ui.decodeImageFromPixels` accepts with
+`ui.PixelFormat.rgba8888`. Like `encode`, it runs any pipeline first.
+
+```dart
+final pixels = image.resize(400, 400).toRgba();
+print('${pixels.width}x${pixels.height}, ${pixels.bytes.length} bytes');
+```
+
+`Pixer.fromPixels` goes the other way, copying a raw 8-bit buffer into a new
+image. Pass `layout` for `PixelLayout.rgb8`, `bgra8`, or `gray8` input.
+
+```dart
+final image = Pixer.fromPixels(width, height, bgraBytes, layout: PixelLayout.bgra8);
+```
+
 ## Read metadata
 
 ```dart

@@ -19,3 +19,4 @@ export 'src/pixer_exception.dart' hide checkBatchError, checkImageError;
 export 'src/enums.dart' show FilterTypeEnum, ImageErrorCode, ImageFormatEnum;
 export 'src/image_metadata.dart';
 export 'src/pixer_encoder.dart';
+export 'src/raw_pixels.dart';

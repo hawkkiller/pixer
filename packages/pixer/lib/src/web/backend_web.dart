@@ -5,6 +5,7 @@ import '../image_metadata.dart';
 import '../image_operation.dart';
 import '../pixer_encoder.dart';
 import '../pixer_exception.dart';
+import '../raw_pixels.dart';
 import 'wasm_runtime.dart';
 
 /// Owns a handle in the initialized WASM instance.
@@ -49,6 +50,13 @@ final class BackendImage {
   factory BackendImage.fromMemory(Uint8List bytes, [ImageFormatEnum? format]) =>
       BackendImage._(_wasm.loadImage(bytes, format));
 
+  factory BackendImage.fromPixels(
+    int width,
+    int height,
+    Uint8List bytes,
+    PixelLayout layout,
+  ) => BackendImage._(_wasm.fromPixels(width, height, bytes, layout));
+
   PixerMetadata getMetadata() => _wasm.metadata(_handle);
 
   BackendImage batchToImage(List<ImageOperation> operations) =>
@@ -58,6 +66,9 @@ final class BackendImage {
     PixerEncoder encoder, [
     List<ImageOperation> operations = const [],
   ]) => _wasm.encode(_handle, operations, encoder.format, encoder.jpegQuality);
+
+  RawPixels toRgba([List<ImageOperation> operations = const []]) =>
+      _wasm.toRgba(_handle, operations);
 
   void saveToFile(String path, [List<ImageOperation> operations = const []]) =>
       throw UnsupportedError(

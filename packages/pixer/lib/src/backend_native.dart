@@ -4,12 +4,19 @@ import 'package:ffi/ffi.dart' as ffi;
 
 import 'abi.dart';
 import 'bindings/bindings.dart'
-    hide FilterTypeEnum, ImageErrorCode, ImageFormatEnum, PixerOperationKind, PIXER_FORMAT_DETECT;
+    hide
+        FilterTypeEnum,
+        ImageErrorCode,
+        ImageFormatEnum,
+        PixelLayout,
+        PixerOperationKind,
+        PIXER_FORMAT_DETECT;
 import 'enums.dart';
 import 'image_metadata.dart';
 import 'image_operation.dart';
 import 'pixer_encoder.dart';
 import 'pixer_exception.dart';
+import 'raw_pixels.dart';
 
 /// Owns a native handle. The shared Pixer API guards access after disposal.
 final class BackendImage implements ffi.Finalizable {
@@ -23,11 +30,11 @@ final class BackendImage implements ffi.Finalizable {
   }
 
   final ffi.Pointer<ImageHandle> _handle;
-  static final _finalizer = ffi.NativeFinalizer(
-    ffi.Native.addressOf<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ImageHandle>)>>(
-      pixer_free,
-    ).cast(),
-  );
+  static final ffi.Pointer<ffi.NativeFinalizerFunction> _free =
+      ffi.Native.addressOf<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ImageHandle>)>>(
+        pixer_free,
+      ).cast();
+  static final _finalizer = ffi.NativeFinalizer(_free);
 
   // Evaluated once; throws on mismatch.
   static final bool _compatible = _checkAbi();
@@ -69,6 +76,18 @@ final class BackendImage implements ffi.Finalizable {
     );
     return BackendImage._(image.value);
   });
+
+  // pixer_from_pixels is a leaf call, so it can read the Dart bytes in place.
+  factory BackendImage.fromPixels(int width, int height, Uint8List bytes, PixelLayout layout) =>
+      ffi.using((arena) {
+        _ensureCompatible();
+        final image = arena<ffi.Pointer<ImageHandle>>();
+        checkImageError(
+          pixer_from_pixels(width, height, bytes.address, bytes.length, layout.value, image),
+          'input: ${width}x$height ${layout.name} pixels',
+        );
+        return BackendImage._(image.value);
+      });
 
   PixerMetadata getMetadata() => ffi.using((arena) {
     final pointer = arena<ImageMetadata>();
@@ -124,6 +143,33 @@ final class BackendImage implements ffi.Finalizable {
           pixer_free_buffer(data, count);
         }
       });
+
+  // The bytes are a view of the RGBA image that owns them, freed with that
+  // image once the list is garbage collected.
+  RawPixels toRgba([List<ImageOperation> operations = const []]) => ffi.using((arena) {
+    final image = arena<ffi.Pointer<ImageHandle>>();
+    final data = arena<ffi.Pointer<ffi.Uint8>>();
+    final failedIndex = arena<ffi.UintPtr>();
+    final code = pixer_batch_to_rgba(
+      _handle,
+      _operations(arena, operations),
+      operations.length,
+      image,
+      data,
+      failedIndex,
+    );
+    checkBatchError(code, failedIndex.value, operations, 'toRgba');
+    final rgba = image.value;
+    final metadata = arena<ImageMetadata>();
+    final metadataCode = pixer_get_metadata(rgba, metadata);
+    if (metadataCode != 0) {
+      pixer_free(rgba);
+      checkImageError(metadataCode, 'operation: toRgba');
+    }
+    final (width, height) = (metadata.ref.width, metadata.ref.height);
+    final bytes = data.value.asTypedList(width * height * 4, finalizer: _free, token: rgba.cast());
+    return RawPixels(width, height, bytes);
+  });
 
   void saveToFile(String path, [List<ImageOperation> operations = const []]) => ffi.using((arena) {
     final failedIndex = arena<ffi.UintPtr>();

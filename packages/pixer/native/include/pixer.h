@@ -144,6 +144,35 @@ typedef uint32_t ImageFormatEnum;
 #endif // __cplusplus
 
 /**
+ * Byte order of 8-bit pixels passed to `pixer_from_pixels`.
+ */
+enum PixelLayout
+#ifdef __cplusplus
+  : uint32_t
+#endif // __cplusplus
+ {
+  /**
+   * Red, green, blue, alpha; 4 bytes per pixel.
+   */
+  Rgba8 = 0,
+  /**
+   * Red, green, blue; 3 bytes per pixel.
+   */
+  Rgb8 = 1,
+  /**
+   * Blue, green, red, alpha; 4 bytes per pixel. Stored as RGBA.
+   */
+  Bgra8 = 2,
+  /**
+   * Luminance; 1 byte per pixel.
+   */
+  Gray8 = 3,
+};
+#ifndef __cplusplus
+typedef uint32_t PixelLayout;
+#endif // __cplusplus
+
+/**
  * Stable operation identifiers shared by the native and Dart batch APIs.
  *
  * Each variant documents how it reads the `PixerOperation` slots; unused
@@ -237,12 +266,12 @@ void pixer_free_buffer(uint8_t *ptr, uintptr_t len);
 void pixer_free(struct ImageHandle *handle);
 
 /**
- * Load an image from a file path into `out_image`.
+ * Load an image from a file path into `out_image`, applying its EXIF orientation.
  */
 ImageErrorCode pixer_load(const char *path, struct ImageHandle **out_image);
 
 /**
- * Load an image from memory into `out_image`.
+ * Load an image from memory into `out_image`, applying its EXIF orientation.
  *
  * `format` is an `ImageFormatEnum` value, or `PIXER_FORMAT_DETECT`.
  */
@@ -250,6 +279,21 @@ ImageErrorCode pixer_load_from_memory(const uint8_t *data,
                                       uintptr_t len,
                                       uint32_t format,
                                       struct ImageHandle **out_image);
+
+/**
+ * Create an image from `len` bytes of 8-bit pixels at `data`, row-major with
+ * no row padding, and write it to `out_image`. `layout` is a `PixelLayout`
+ * value. The bytes are copied, so the caller keeps ownership of `data`.
+ *
+ * `len` must equal `width * height * bytes per pixel`; otherwise this
+ * returns `InvalidParameter`.
+ */
+ImageErrorCode pixer_from_pixels(uint32_t width,
+                                 uint32_t height,
+                                 const uint8_t *data,
+                                 uintptr_t len,
+                                 uint32_t layout,
+                                 struct ImageHandle **out_image);
 
 /**
  * Get image metadata
@@ -280,6 +324,22 @@ ImageErrorCode pixer_batch_encode(const struct ImageHandle *handle,
                                   uint8_t **out_data,
                                   uintptr_t *out_len,
                                   uintptr_t *out_failed_index);
+
+/**
+ * Apply a batch and convert the final image to 8-bit RGBA, converting down
+ * from 16-bit and floating-point images.
+ *
+ * `out_image` receives a new RGBA image that owns the pixels: `out_data`
+ * points at its `width * height * 4` bytes, row-major with no row padding,
+ * and stays valid until `out_image` is freed with `pixer_free`. Read the
+ * dimensions with `pixer_get_metadata`.
+ */
+ImageErrorCode pixer_batch_to_rgba(const struct ImageHandle *handle,
+                                   const struct PixerOperation *operations,
+                                   uintptr_t operation_count,
+                                   struct ImageHandle **out_image,
+                                   const uint8_t **out_data,
+                                   uintptr_t *out_failed_index);
 
 /**
  * Apply a batch and save the final image to a file; the extension picks the format.

@@ -7,6 +7,7 @@ import '../enums.dart';
 import '../image_metadata.dart';
 import '../pixer_exception.dart';
 import '../image_operation.dart';
+import '../raw_pixels.dart';
 
 @JS('WebAssembly.instantiate')
 external JSPromise<JSObject> _instantiate(JSObject bytes, JSObject imports);
@@ -45,6 +46,14 @@ extension type _Exports._(JSObject _) implements JSObject {
     int format,
     int outImage,
   );
+  external int pixer_from_pixels(
+    int width,
+    int height,
+    int data,
+    int length,
+    int layout,
+    int outImage,
+  );
   external int pixer_get_metadata(int handle, int metadata);
   external int pixer_batch_to_image(
     int handle,
@@ -61,6 +70,14 @@ extension type _Exports._(JSObject _) implements JSObject {
     int quality,
     int outData,
     int outLength,
+    int failedIndex,
+  );
+  external int pixer_batch_to_rgba(
+    int handle,
+    int operations,
+    int count,
+    int outImage,
+    int outData,
     int failedIndex,
   );
 }
@@ -138,6 +155,22 @@ final class WasmRuntime {
         return _u32(pointer);
       }, alignment: 4);
 
+  // One block: the out-handle slot, then the pixels.
+  int fromPixels(int width, int height, Uint8List data, PixelLayout layout) =>
+      _withAllocation(4 + data.length, (pointer) {
+        Uint8List.view(_buffer, pointer + 4, data.length).setAll(0, data);
+        final code = _exports.pixer_from_pixels(
+          width,
+          height,
+          pointer + 4,
+          data.length,
+          layout.value,
+          pointer,
+        );
+        checkImageError(code, 'input: ${width}x$height ${layout.name} pixels');
+        return _u32(pointer);
+      }, alignment: 4);
+
   PixerMetadata metadata(int handle) => _withAllocation(12, (pointer) {
     final code = _exports.pixer_get_metadata(handle, pointer);
     checkImageError(code, 'operation: metadata');
@@ -190,6 +223,33 @@ final class WasmRuntime {
         return _u32(output);
       }, alignment: 4);
     });
+  }
+
+  RawPixels toRgba(int handle, List<ImageOperation> operations) {
+    final (image, data) = _withOperations(operations, (operationsPointer) {
+      return _withAllocation(12, (output) {
+        final code = _exports.pixer_batch_to_rgba(
+          handle,
+          operationsPointer,
+          operations.length,
+          output,
+          output + 4,
+          output + 8,
+        );
+        checkBatchError(code, _u32(output + 8), operations, 'toRgba');
+        return (_u32(output), _u32(output + 4));
+      }, alignment: 4);
+    });
+    try {
+      final PixerMetadata(:width, :height) = metadata(image);
+      return RawPixels(
+        width,
+        height,
+        Uint8List.fromList(Uint8List.view(_buffer, data, width * height * 4)),
+      );
+    } finally {
+      _exports.pixer_free(image);
+    }
   }
 
   T _withOperations<T>(
