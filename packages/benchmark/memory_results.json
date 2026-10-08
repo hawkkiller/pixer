@@ -1,0 +1,168 @@
+{
+  "timestamp": "2026-10-08T09:46:05.595566",
+  "dart": "3.13.5 (stable) (Tue Sep 29 01:00:52 2026 -0700) on \"linux_x64\"",
+  "cpus": 4,
+  "runs": 3,
+  "results": {
+    "decode": {
+      "pixer": {
+        "baseline_rss": 9158656,
+        "peak_rss": 18616320,
+        "peak_rss_growth": 9457664,
+        "exact_peak": true,
+        "peak_rss_growth_runs": [
+          9273344,
+          9457664,
+          9457664
+        ],
+        "dart_heap_allocated": -128080,
+        "dart_heap_retained": -233152,
+        "dart_external_retained": 6220800,
+        "result": "Pixer"
+      },
+      "image": {
+        "baseline_rss": 9441280,
+        "peak_rss": 53112832,
+        "peak_rss_growth": 43671552,
+        "exact_peak": true,
+        "peak_rss_growth_runs": [
+          43180032,
+          43671552,
+          43696128
+        ],
+        "dart_heap_allocated": 58093904,
+        "dart_heap_retained": 6012240,
+        "dart_external_retained": 0,
+        "result": "Image"
+      }
+    },
+    "resize_800x600": {
+      "pixer": {
+        "baseline_rss": 9183232,
+        "peak_rss": 23453696,
+        "peak_rss_growth": 14270464,
+        "exact_peak": true,
+        "peak_rss_growth_runs": [
+          14200832,
+          14270464,
+          14401536
+        ],
+        "dart_heap_allocated": -128512,
+        "dart_heap_retained": -239616,
+        "dart_external_retained": 1440000,
+        "result": "Pixer"
+      },
+      "image": {
+        "baseline_rss": 9359360,
+        "peak_rss": 61915136,
+        "peak_rss_growth": 52555776,
+        "exact_peak": true,
+        "peak_rss_growth_runs": [
+          46059520,
+          52555776,
+          53272576
+        ],
+        "dart_heap_allocated": 50432368,
+        "dart_heap_retained": 1273360,
+        "dart_external_retained": 0,
+        "result": "Image"
+      }
+    },
+    "resize_3840x2160": {
+      "pixer": {
+        "baseline_rss": 9269248,
+        "peak_rss": 56172544,
+        "peak_rss_growth": 46903296,
+        "exact_peak": true,
+        "peak_rss_growth_runs": [
+          46706688,
+          46903296,
+          46968832
+        ],
+        "dart_heap_allocated": -126928,
+        "dart_heap_retained": -231904,
+        "dart_external_retained": 24883200,
+        "result": "Pixer"
+      },
+      "image": {
+        "baseline_rss": 9412608,
+        "peak_rss": 85524480,
+        "peak_rss_growth": 76111872,
+        "exact_peak": true,
+        "peak_rss_growth_runs": [
+          69414912,
+          76111872,
+          76832768
+        ],
+        "dart_heap_allocated": 52661056,
+        "dart_heap_retained": 24717616,
+        "dart_external_retained": 0,
+        "result": "Image"
+      }
+    },
+    "encode_jpeg": {
+      "pixer": {
+        "baseline_rss": 9277440,
+        "peak_rss": 18911232,
+        "peak_rss_growth": 9633792,
+        "exact_peak": true,
+        "peak_rss_growth_runs": [
+          9568256,
+          9633792,
+          9764864
+        ],
+        "dart_heap_allocated": 511664,
+        "dart_heap_retained": 363472,
+        "dart_external_retained": 0,
+        "result": "Uint8List"
+      },
+      "image": {
+        "baseline_rss": 9158656,
+        "peak_rss": 58617856,
+        "peak_rss_growth": 49459200,
+        "exact_peak": true,
+        "peak_rss_growth_runs": [
+          49373184,
+          49459200,
+          49528832
+        ],
+        "dart_heap_allocated": 14731680,
+        "dart_heap_retained": 475168,
+        "dart_external_retained": 0,
+        "result": "_Uint8ArrayView"
+      }
+    },
+    "pipeline_4k": {
+      "pixer": {
+        "baseline_rss": 9453568,
+        "peak_rss": 56356864,
+        "peak_rss_growth": 46903296,
+        "exact_peak": true,
+        "peak_rss_growth_runs": [
+          46837760,
+          46903296,
+          46907392
+        ],
+        "dart_heap_allocated": 1281632,
+        "dart_heap_retained": 1132720,
+        "dart_external_retained": 0,
+        "result": "Uint8List"
+      },
+      "image": {
+        "baseline_rss": 9228288,
+        "peak_rss": 92282880,
+        "peak_rss_growth": 83054592,
+        "exact_peak": true,
+        "peak_rss_growth_runs": [
+          75481088,
+          83054592,
+          83558400
+        ],
+        "dart_heap_allocated": 81015648,
+        "dart_heap_retained": 1842336,
+        "dart_external_retained": 0,
+        "result": "_Uint8ArrayView"
+      }
+    }
+  }
+}
