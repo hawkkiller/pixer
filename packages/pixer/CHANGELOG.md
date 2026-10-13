@@ -1,3 +1,7 @@
+## 0.0.13
+
+- Added the `pixer` command-line tool with `info` and `convert` commands. Install it with `dart install pixer`.
+
 ## 0.0.12
 
 - Native binaries no longer include image codecs outside the supported formats (AVIF, EXR, HDR, QOI, TGA, DDS, PNM, Farbfeld), shrinking them by roughly 60% (macOS arm64: 4.9 MB to 1.8 MB). Auto-detected loading of those formats now throws `UnsupportedFormatException`.

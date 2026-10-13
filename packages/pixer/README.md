@@ -6,7 +6,7 @@ Fast, cross-platform image manipulation for Dart, powered by Rust via FFI.
 
 ```yaml
 dependencies:
-  pixer: ^0.0.12
+  pixer: ^0.0.13
 ```
 
 Native binaries are downloaded automatically via Dart build hooks.
@@ -211,6 +211,27 @@ All errors throw typed `PixerException` subclasses:
 | `InvalidPointerException` | Image already disposed |
 | `InvalidParameterException` | Scalar out of range (e.g. JPEG quality) |
 | `UnknownException` | Unclassified native error |
+
+## Command Line
+
+Pixer ships a `pixer` executable. Install it with:
+
+```bash
+dart install pixer
+```
+
+`dart install` runs Pixer's build hook and bundles the native library with the
+executable. `dart pub global activate` does not run build hooks, so the CLI it
+installs cannot find the native library.
+
+```bash
+pixer info photo.jpg                     # 4032x3024 rgb
+pixer convert photo.jpg thumb.webp --resize 256
+pixer convert photo.jpg out.jpg --crop 0,0,1000x1000 --rotate 90 --quality 85
+cat photo.png | pixer convert - - --format jpeg --grayscale > gray.jpg
+```
+
+Operations run in the order given. Run `pixer help convert` for the full list.
 
 ## Platforms
 
