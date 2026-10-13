@@ -221,8 +221,8 @@ dart install pixer
 ```
 
 `dart install` runs Pixer's build hook and bundles the native library with the
-executable. `dart pub global activate` does not support packages with build
-hooks, so it cannot install the CLI.
+executable. `dart pub global activate` does not run build hooks, so the CLI it
+installs cannot find the native library.
 
 ```bash
 pixer info photo.jpg                     # 4032x3024 rgb
