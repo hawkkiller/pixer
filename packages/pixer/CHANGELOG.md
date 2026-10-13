@@ -1,4 +1,4 @@
-## Unreleased
+## 0.0.13
 
 - Added the `pixer` command-line tool with `info` and `convert` commands. Install it with `dart install pixer`.
 
