@@ -117,7 +117,7 @@ jobs:
       - run: dart pub get
 
       # Builds the host library through the workspace's local_build hook.
-      - run: dart test test/pixer_test.dart test/pixer_file_test.dart
+      - run: dart test test/pixer_test.dart test/pixer_file_test.dart test/pixer_cli_test.dart
 
       - run: mkdir libs
 

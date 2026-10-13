@@ -1,0 +1,51 @@
+---
+title: Command line
+description: Inspect and transform images with the pixer executable.
+---
+
+## Install
+
+```bash
+dart install pixer
+```
+
+`dart install` runs Pixer's build hook and bundles the native library with the
+executable. `dart pub global activate` does not support packages with build
+hooks, so it cannot install the CLI.
+
+## Inspect images
+
+```bash
+pixer info photo.jpg            # 4032x3024 rgb
+pixer info *.png                # one line per image, prefixed with its path
+```
+
+## Convert images
+
+`pixer convert <input> <output> [options]` loads the input, runs the operations
+in the order given, and encodes the result in the format of the output
+extension.
+
+```bash
+pixer convert photo.jpg thumb.webp --resize 256
+pixer convert photo.jpg out.jpg --crop 0,0,1000x1000 --rotate 90 --quality 85
+cat photo.png | pixer convert - - --format jpeg --grayscale > gray.jpg
+```
+
+| Option | Effect |
+|--------|--------|
+| `--resize <W>x<H>` | Fit within W x H, preserving aspect ratio. A single number fits within a square. |
+| `--resize-exact <W>x<H>` | Resize to exactly W x H. |
+| `--crop <X>,<Y>,<W>x<H>` | Crop a W x H rectangle at X, Y. |
+| `--rotate <90\|180\|270>` | Rotate clockwise. |
+| `--flip <h\|v>` | Flip horizontally or vertically. |
+| `--blur <sigma>` | Gaussian blur. |
+| `--brightness <value>` | Add to color channels; negative darkens. |
+| `--contrast <value>` | Adjust contrast; negative reduces. |
+| `--grayscale`, `--invert` | Color conversions. |
+| `--format <format>` | Output format; required when writing to stdout. |
+| `--quality <1-100>` | JPEG quality (default 75). |
+| `--filter <filter>` | Resize filter: `nearest`, `triangle`, `catmull-rom`, `gaussian`, or `lanczos3` (default). |
+
+Use `-` as the input or output path to read from stdin or write to stdout.
+Usage errors exit with code 64 and image errors with code 1.

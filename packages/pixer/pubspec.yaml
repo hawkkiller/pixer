@@ -4,6 +4,9 @@ version: 0.0.12
 resolution: workspace
 repository: https://github.com/hawkkiller/pixer
 
+executables:
+  pixer:
+
 environment:
   sdk: ^3.10.7
 

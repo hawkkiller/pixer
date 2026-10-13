@@ -212,6 +212,27 @@ All errors throw typed `PixerException` subclasses:
 | `InvalidParameterException` | Scalar out of range (e.g. JPEG quality) |
 | `UnknownException` | Unclassified native error |
 
+## Command Line
+
+Pixer ships a `pixer` executable. Install it with:
+
+```bash
+dart install pixer
+```
+
+`dart install` runs Pixer's build hook and bundles the native library with the
+executable. `dart pub global activate` does not support packages with build
+hooks, so it cannot install the CLI.
+
+```bash
+pixer info photo.jpg                     # 4032x3024 rgb
+pixer convert photo.jpg thumb.webp --resize 256
+pixer convert photo.jpg out.jpg --crop 0,0,1000x1000 --rotate 90 --quality 85
+cat photo.png | pixer convert - - --format jpeg --grayscale > gray.jpg
+```
+
+Operations run in the order given. Run `pixer help convert` for the full list.
+
 ## Platforms
 
 Linux, macOS, Windows, Android, iOS, Web (WebAssembly)

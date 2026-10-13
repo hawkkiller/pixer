@@ -1,3 +1,5 @@
 tool
-bin
+# Benchmarks; only the pixer CLI ships.
+bin/*
+!bin/pixer.dart
 assets
