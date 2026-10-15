@@ -23,7 +23,7 @@ const assetHashes = <String, String>{
   'libpixer_macos_x86_64.dylib':
       'ef7477c71b9fdf05e0ebc0c9d6b18f263fa4d6a65183faf45a3678de58e943f5',
   'pixer_windows_arm64.dll':
-      '1932bb9df2fa03052be9e1c3fec98ad6f58a8b5a6201ba65e2aa5a190515d618',
+      'a6af14a31ef296f5734b3d303266e09780db5e298cda3e4823643de622d48d6d',
   'pixer_windows_x86_64.dll':
-      '41acd502546aafc51de9935bea655e2e5ea8094b04aca6173746330d7b435752',
+      '721b4a676102ac36be657d53d53ca22c8ca8ce7b3a911ba90a79cfa507d8b44a',
 };
