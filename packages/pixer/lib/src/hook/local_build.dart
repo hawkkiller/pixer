@@ -1,3 +1,4 @@
+import 'package:code_assets/code_assets.dart';
 import 'package:hooks/hooks.dart';
 import 'package:native_toolchain_rust/native_toolchain_rust.dart';
 
@@ -32,11 +33,20 @@ Future<void> runLocalBuild(
   BuildOutputBuilder output, {
   List<String>? formats,
 }) async {
+  // Cargo runs outside the native crate, so load its Android config explicitly.
+  final androidConfig = input.config.code.targetOS == OS.android
+      ? input.packageRoot.resolve('../../native/.cargo/config.toml')
+      : null;
+  if (androidConfig != null) output.dependencies.add(androidConfig);
+
   final rustBuilder = RustBuilder(
     assetName: 'src/bindings/bindings.dart',
     cratePath: '../../native',
     enableDefaultFeatures: formats == null,
     features: formats ?? const [],
+    extraCargoBuildArgs: [
+      if (androidConfig != null) ...['--config', androidConfig.toFilePath()],
+    ],
     extraCargoEnvironmentVariables: {
       'CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER': 'aarch64-linux-gnu-gcc',
     },
