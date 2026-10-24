@@ -16,6 +16,19 @@ tried, the numbers, the decision. Measured on Apple M-series unless noted.
   overrides the root one, so tests silently load an old binary. Delete
   `packages/pixer/.dart_tool` if rebuilt code seems to have no effect.
 
+## Memory benchmark (2026-10)
+
+- `packages/benchmark/bin/memory.dart`: peak RSS growth from fresh AOT
+  processes (Linux resets the peak via `/proc/self/clear_refs`), Dart heap
+  allocations from a JIT child read by the parent over the VM service.
+- Pitfalls: decoding the source before the measured op leaves garbage the op
+  reuses, hiding its cost (so every case starts from JPEG bytes); reading the
+  allocation profile in-process puts the decoded profile on the measured heap
+  (MBs of noise); the VM still allocates ~12 MB while serving a profile, so
+  an empty command's cost is subtracted (stable to a few KB).
+- Linux x86_64, 4 cores: pixer peaks 1.6x (4K output) to 5x (decode, encode)
+  lower than `image`, and allocates ~0 on the Dart heap except encoded output.
+
 ## Compiler and FFI flags (2026-10)
 
 - The release profile already uses `opt-level=3`, fat LTO, `codegen-units=1`,

@@ -14,6 +14,7 @@ dependencies:
   image: ^4.5.4
   pixer:
     path: ../pixer
+  vm_service: ^15.0.0
 
 dev_dependencies:
   lints: ^6.0.0
